@@ -235,6 +235,62 @@ function drawWorldMap(){
   drawContinent(.52,.35,.08,.1,'#1a2744');
   cx.restore();
 
+  // Draw player buildings on map
+  if(G.nation){
+    for(const b of G.buildings){
+      const spec=BLDS[b.type];if(!spec)continue;
+      const pulse=1+Math.sin(Date.now()*.003+b.x)*.1;
+      // Building glow
+      cx.save();cx.shadowColor=spec.color;cx.shadowBlur=10*pulse;
+      cx.fillStyle=spec.color;cx.globalAlpha=.8;
+
+      if(b.type==='factory'){
+        // Square
+        cx.fillRect(b.x-10,b.y-10,20,20);
+        cx.fillStyle='#000';cx.font='12px Arial';cx.textAlign='center';cx.fillText('$',b.x,b.y+4);cx.textAlign='left';
+      }else if(b.type==='milbase'){
+        // Triangle
+        cx.beginPath();cx.moveTo(b.x,b.y-13);cx.lineTo(b.x+12,b.y+9);cx.lineTo(b.x-12,b.y+9);cx.closePath();cx.fill();
+        cx.fillStyle='#000';cx.font='10px Arial';cx.textAlign='center';cx.fillText('M',b.x,b.y+5);cx.textAlign='left';
+      }else if(b.type==='lab'){
+        // Diamond
+        cx.beginPath();cx.moveTo(b.x,b.y-12);cx.lineTo(b.x+10,b.y);cx.lineTo(b.x,b.y+12);cx.lineTo(b.x-10,b.y);cx.closePath();cx.fill();
+        cx.fillStyle='#000';cx.font='10px Arial';cx.textAlign='center';cx.fillText('T',b.x,b.y+4);cx.textAlign='left';
+      }else if(b.type==='defense'){
+        // Shield shape
+        cx.beginPath();cx.arc(b.x,b.y,12,0,7);cx.fill();
+        cx.fillStyle='#000';cx.font='bold 10px Arial';cx.textAlign='center';cx.fillText('D',b.x,b.y+4);cx.textAlign='left';
+      }else if(b.type==='silo'){
+        // Rocket shape
+        cx.fillRect(b.x-6,b.y-14,12,28);
+        cx.fillStyle='#000';cx.font='10px Arial';cx.textAlign='center';cx.fillText('R',b.x,b.y+4);cx.textAlign='left';
+      }
+      cx.globalAlpha=1;cx.restore();
+    }
+
+    // Draw build zone circle around player core
+    const cp=MAP_POS[G.nation];
+    cx.save();cx.strokeStyle=NATIONS[G.nation].color+'22';cx.lineWidth=1;cx.setLineDash([6,6]);
+    cx.beginPath();cx.arc(cp.x*W,cp.y*H,180,0,7);cx.stroke();cx.setLineDash([]);cx.restore();
+
+    // Draw ghost building at cursor
+    if(G.selected&&canBuild(G.selected,G.mouseX,G.mouseY)){
+      const spec=BLDS[G.selected];
+      cx.save();cx.globalAlpha=.4;cx.fillStyle=spec.color;
+      if(G.selected==='factory')cx.fillRect(G.mouseX-10,G.mouseY-10,20,20);
+      else if(G.selected==='milbase'){cx.beginPath();cx.moveTo(G.mouseX,G.mouseY-13);cx.lineTo(G.mouseX+12,G.mouseY+9);cx.lineTo(G.mouseX-12,G.mouseY+9);cx.closePath();cx.fill()}
+      else if(G.selected==='lab'){cx.beginPath();cx.moveTo(G.mouseX,G.mouseY-12);cx.lineTo(G.mouseX+10,G.mouseY);cx.lineTo(G.mouseX,G.mouseY+12);cx.lineTo(G.mouseX-10,G.mouseY);cx.closePath();cx.fill()}
+      else if(G.selected==='defense'){cx.beginPath();cx.arc(G.mouseX,G.mouseY,12,0,7);cx.fill()}
+      else if(G.selected==='silo')cx.fillRect(G.mouseX-6,G.mouseY-14,12,28);
+      cx.restore();
+    }else if(G.selected){
+      // Red ghost when can't build
+      cx.save();cx.globalAlpha=.25;cx.fillStyle='#ff345d';
+      cx.beginPath();cx.arc(G.mouseX,G.mouseY,12,0,7);cx.fill();
+      cx.restore();
+    }
+  }
+
   // Draw nation markers
   for(const[k,pos]of Object.entries(MAP_POS)){
     const px=pos.x*W,py=pos.y*H;
@@ -595,15 +651,28 @@ function executeAttack(threat){
 }
 
 // ====== BUILDING ======
-function canBuild(type){
+function canBuild(type,mx,my){
   const spec=BLDS[type];
-  return spec&&G.money>=spec.cost;
+  if(!spec||G.money<spec.cost)return false;
+  // Must build near own territory (within 150px of core)
+  const cp=MAP_POS[G.nation];
+  const cx_=cp.x*W,cy_=cp.y*H;
+  if(Math.hypot(mx-cx_,my-cy_)>180)return false;
+  // No overlap with existing buildings
+  for(const b of G.buildings){if(Math.hypot(b.x-mx,b.y-my)<30)return false}
+  return true;
 }
 
-function build(type){
-  if(!canBuild(type))return;
+function build(type,mx,my){
+  if(!canBuild(type,mx,my)){
+    if(G.money<BLDS[type].cost)addLog('Nicht genug Geld!','r');
+    else addLog('Zu weit vom Territorium! Baue näher am Kern.','r');
+    playAlert();return;
+  }
   const spec=BLDS[type];G.money-=spec.cost;
-  G.buildings.push({type,level:1});
+  G.buildings.push({type,x:mx,y:my,level:1,hp:100});
+  burst(mx,my,spec.color,20,1.2);
+  floatText(mx,my-30,`${spec.label} gebaut!`,spec.color);
   addLog(`🏗️ ${spec.label} gebaut! (-${spec.cost}$)`,'g');
   playBuild();
 
@@ -733,7 +802,7 @@ cv.addEventListener('mousemove',e=>{G.mouseX=e.clientX;G.mouseY=e.clientY});
 cv.addEventListener('click',e=>{
   initAudio();
   if(G.mode==='menu'){handleClick_CountrySelect(e.clientX,e.clientY);return}
-  if(G.mode==='playing'&&canBuild(G.selected)){build(G.selected)}
+  if(G.mode==='playing'&&canBuild(G.selected,e.clientX,e.clientY)){build(G.selected,e.clientX,e.clientY)}
 });
 addEventListener('keydown',e=>{
   initAudio();
