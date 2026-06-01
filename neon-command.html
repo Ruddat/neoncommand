@@ -515,30 +515,40 @@ function drawWorldMap(){
     }
   }
 
-  // Threat missiles on map
+  // Threat missiles on map (enemy rockets flying toward player)
   for(const t of G.threats){
     const from=MAP_POS[t.from],to=MAP_POS[G.nation];
     const progress=Math.min(1,t.timer/t.duration);
     const px=from.x*W+(to.x*W-from.x*W)*progress,py=from.y*H+(to.y*H-from.y*H)*progress;
-    cx.save();cx.shadowColor='#ff345d';cx.shadowBlur=15;cx.fillStyle='#ff345d';
-    cx.beginPath();cx.arc(px,py,6+Math.sin(Date.now()*.01)*3,0,7);cx.fill();
-    cx.strokeStyle='rgba(255,52,93,.4)';cx.lineWidth=2;cx.beginPath();cx.moveTo(from.x*W,from.y*H);cx.lineTo(px,py);cx.stroke();cx.restore();
+    const n=NATIONS[t.from];
+    // Draw as proper rocket
+    const angle=Math.atan2(to.y*H-from.y*H,to.x*W-from.x*W);
+    cx.save();cx.shadowColor='#ff345d';cx.shadowBlur=15;cx.fillStyle=n.color||'#ff345d';
+    cx.translate(px,py);cx.rotate(angle);
+    cx.fillRect(-8,-3,16,6);cx.fillStyle='#ffb000';cx.fillRect(8,-2,6,4);cx.restore();
+    // Trail line
+    cx.save();cx.strokeStyle='rgba(255,52,93,.5)';cx.lineWidth=2;cx.beginPath();
+    cx.moveTo(from.x*W,from.y*H);cx.lineTo(px,py);cx.stroke();cx.restore();
+    // Stärke label
+    cx.save();cx.fillStyle='#ff345d';cx.font='bold 10px Arial';cx.textAlign='center';
+    cx.fillText(`⚔️${t.strength}`,px,py-12);cx.textAlign='left';cx.restore();
   }
 
-  // Attack scene overlay
-  if(G.flash>0){cx.fillStyle=G.flashColor+'33';cx.fillRect(0,0,W,H)}
+  // Attack scene – NO dark overlay, rockets fly over map!
+  if(G.flash>0){cx.fillStyle=G.flashColor+'22';cx.fillRect(0,0,W,H)}
   if(G.attackScene){
-    cx.fillStyle='rgba(0,0,0,.4)';cx.fillRect(0,0,W,H);
     for(const m of G.attackScene.missiles||[]){
-      cx.save();cx.shadowColor='#ff345d';cx.shadowBlur=15;cx.fillStyle='#ff345d';
+      const mc=m.color||'#ff345d';
+      cx.save();cx.shadowColor=mc;cx.shadowBlur=20;cx.fillStyle=mc;
       const angle=Math.atan2(m.vy,m.vx);cx.translate(m.x,m.y);cx.rotate(angle);
-      cx.fillRect(-12,-3,24,6);cx.fillStyle='#ffb000';cx.fillRect(12,-2,6,4);cx.restore();
-      cx.save();cx.strokeStyle='rgba(255,176,0,.3)';cx.lineWidth=2;cx.beginPath();cx.moveTo(m.x,m.y);cx.lineTo(m.x-m.vx*.08,m.y-m.vy*.08);cx.stroke();cx.restore();
+      cx.fillRect(-14,-3,28,6);cx.fillStyle='#ffb000';cx.fillRect(14,-2,8,4);cx.restore();
+      // Trail
+      cx.save();cx.strokeStyle=mc+'88';cx.lineWidth=3;cx.beginPath();cx.moveTo(m.x,m.y);cx.lineTo(m.x-m.vx*.12,m.y-m.vy*.12);cx.stroke();cx.restore();
     }
     for(const e of G.attackScene.explosions||[]){
-      const a=e.life/e.max;cx.save();
+      const a=e.life/e.max;const ec=e.color||'#ff345d';cx.save();
       const eg=cx.createRadialGradient(e.x,e.y,0,e.x,e.y,e.size*a);
-      eg.addColorStop(0,'rgba(255,200,50,'+a+')');eg.addColorStop(.4,'rgba(255,100,30,'+(a*.6)+')');eg.addColorStop(1,'rgba(255,50,50,0)');
+      eg.addColorStop(0,'rgba(255,200,50,'+a+')');eg.addColorStop(.4,ec+'99');eg.addColorStop(1,'rgba(255,50,50,0)');
       cx.fillStyle=eg;cx.beginPath();cx.arc(e.x,e.y,e.size*a,0,7);cx.fill();cx.restore();
     }
   }
@@ -587,10 +597,10 @@ function startAttackScene(fromKey,strength){
   const fx=from.x*W,fy=from.y*H,tx=to.x*W,ty=to.y*H;
   const angle=Math.atan2(ty-fy,tx-fx),speed=200;
   const missiles=[];const count=Math.min(8,Math.floor(strength/10)+1);
-  for(let i=0;i<count;i++){missiles.push({x:fx+rnd(-20,20),y:fy+rnd(-20,20),vx:Math.cos(angle)*speed+rnd(-20,20),vy:Math.sin(angle)*speed+rnd(-20,20)})}
+  for(let i=0;i<count;i++){missiles.push({x:fx+rnd(-20,20),y:fy+rnd(-20,20),vx:Math.cos(angle)*speed+rnd(-20,20),vy:Math.sin(angle)*speed+rnd(-20,20),color:'#ff345d'})}
   G.attackScene={missiles,explosions:[]};G.sceneTimer=4;
   const timeToTarget=Math.hypot(tx-fx,ty-fy)/speed;
-  for(let i=0;i<count;i++){setTimeout(()=>{if(G.attackScene){const ex=tx+rnd(-60,60),ey=ty+rnd(-60,60);G.attackScene.explosions.push({x:ex,y:ey,life:1,max:1,size:rnd(30,80)});burst(ex,ey,'#ff345d',15,1.5);burst(ex,ey,'#ffb000',10);playBoom(.4);G.shake=Math.max(G.shake,12);G.flash=.8;G.flashColor='#ff345d'}},(timeToTarget+i*.3)*1000)}
+  for(let i=0;i<count;i++){setTimeout(()=>{if(G.attackScene){const ex=tx+rnd(-60,60),ey=ty+rnd(-60,60);G.attackScene.explosions.push({x:ex,y:ey,life:1,max:1,size:rnd(30,80),color:'#ff345d'});burst(ex,ey,'#ff345d',15,1.5);burst(ex,ey,'#ffb000',10);playBoom(.4);G.shake=Math.max(G.shake,12);G.flash=.8;G.flashColor='#ff345d'}},(timeToTarget+i*.3)*1000)}
   setTimeout(()=>resolveAttack(fromKey,strength),(timeToTarget+count*.3+.5)*1000);
 }
 
@@ -643,21 +653,21 @@ function counterAttack(targetKey){
   const fx=from.x*W,fy=from.y*H,tx=to.x*W,ty=to.y*H;
   const angle=Math.atan2(ty-fy,tx-fx),speed=250;
 
-  // Launch player missiles!
+  // Launch player missiles (PURPLE!)
   const count=Math.min(6,Math.floor(G.offense/15)+1);
   const missiles=[];
-  for(let i=0;i<count;i++){missiles.push({x:fx+rnd(-15,15),y:fy+rnd(-15,15),vx:Math.cos(angle)*speed+rnd(-15,15),vy:Math.sin(angle)*speed+rnd(-15,15)})}
+  for(let i=0;i<count;i++){missiles.push({x:fx+rnd(-15,15),y:fy+rnd(-15,15),vx:Math.cos(angle)*speed+rnd(-15,15),vy:Math.sin(angle)*speed+rnd(-15,15),color:'#a855f7'})}
   G.attackScene={missiles,explosions:[]};G.sceneTimer=4;
   G.shake=8;G.flash=.6;G.flashColor='#a855f7';
   addLog(`🚀 ${pN.flag} greift ${n.flag} ${n.name} an! ${count} Raketen!`,'p');
   playSiren();
 
   const timeToTarget=Math.hypot(tx-fx,ty-fy)/speed;
-  // Explosions at target
+  // Explosions at target (PURPLE!)
   for(let i=0;i<count;i++){setTimeout(()=>{
     if(G.attackScene){
       const ex=tx+rnd(-50,50),ey=ty+rnd(-50,50);
-      G.attackScene.explosions.push({x:ex,y:ey,life:1,max:1,size:rnd(25,60)});
+      G.attackScene.explosions.push({x:ex,y:ey,life:1,max:1,size:rnd(25,60),color:'#a855f7'});
       burst(ex,ey,'#a855f7',15,1.5);burst(ex,ey,'#ffb000',10);playBoom(.4);
       G.shake=Math.max(G.shake,10);G.flash=.7;G.flashColor='#a855f7';
     }
