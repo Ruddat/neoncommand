@@ -21,7 +21,7 @@
     .bb .c{color:#ffb000;font-size:9px}
     .log{position:fixed;bottom:60px;left:10px;padding:8px 10px;background:rgba(4,7,20,.85);border:1px solid rgba(0,217,255,.15);border-radius:4px;font-size:11px;max-width:360px;max-height:160px;overflow-y:auto;line-height:1.5}
     .log .g{color:#00ff9d}.log .r{color:#ff345d}.log .y{color:#ffb000}.log .c{color:#00d9ff}.log .p{color:#ff2bd6}
-    .intel{position:fixed;top:10px;right:10px;padding:10px 14px;background:rgba(4,7,20,.9);border:1px solid rgba(125,92,255,.25);border-radius:6px;font-size:11px;line-height:1.6;min-width:200px;pointer-events:none}
+    .intel{position:fixed;top:10px;right:10px;padding:10px 14px;background:rgba(4,7,20,.9);border:1px solid rgba(125,92,255,.25);border-radius:6px;font-size:11px;line-height:1.6;min-width:220px;pointer-events:none}
   </style>
 </head>
 <body>
@@ -34,7 +34,7 @@
 </div>
 
 <script>
-// ====== NEON COMMAND: GEOPOLITIK v2.0 – ALLE BAUEN! ======
+// ====== NEON COMMAND: GEOPOLITIK v3.0 – ALLE BAUEN & KÄMPFEN! ======
 const cv=document.getElementById('gc'),cx=cv.getContext('2d');
 let W,H;function resize(){W=cv.width=innerWidth;H=cv.height=innerHeight}resize();addEventListener('resize',resize);
 
@@ -45,14 +45,15 @@ function playBoom(v=.3){initAudio();const o=audioCtx.createOscillator(),g=audioC
 function playSiren(){initAudio();const o=audioCtx.createOscillator(),g=audioCtx.createGain();o.type='sine';o.frequency.setValueAtTime(400,audioCtx.currentTime);o.frequency.linearRampToValueAtTime(900,audioCtx.currentTime+.3);o.frequency.linearRampToValueAtTime(400,audioCtx.currentTime+.6);g.gain.setValueAtTime(.15,audioCtx.currentTime);g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+.8);o.connect(g);g.connect(audioCtx.destination);o.start();o.stop(audioCtx.currentTime+.8)}
 function playAlert(){initAudio();const o=audioCtx.createOscillator(),g=audioCtx.createGain();o.type='square';o.frequency.setValueAtTime(880,audioCtx.currentTime);g.gain.setValueAtTime(.1,audioCtx.currentTime);g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+.15);o.connect(g);g.connect(audioCtx.destination);o.start();o.stop(audioCtx.currentTime+.15)}
 function playBuild(){initAudio();const o=audioCtx.createOscillator(),g=audioCtx.createGain();o.type='sine';o.frequency.setValueAtTime(300,audioCtx.currentTime);o.frequency.linearRampToValueAtTime(600,audioCtx.currentTime+.1);g.gain.setValueAtTime(.12,audioCtx.currentTime);g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+.15);o.connect(g);g.connect(audioCtx.destination);o.start();o.stop(audioCtx.currentTime+.15)}
+function playBuildAI(){initAudio();const o=audioCtx.createOscillator(),g=audioCtx.createGain();o.type='triangle';o.frequency.setValueAtTime(250,audioCtx.currentTime);o.frequency.linearRampToValueAtTime(500,audioCtx.currentTime+.08);g.gain.setValueAtTime(.06,audioCtx.currentTime);g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+.1);o.connect(g);g.connect(audioCtx.destination);o.start();o.stop(audioCtx.currentTime+.1)}
 
 // ====== DATA ======
 const NATIONS={
-  usa:{name:'USA',flag:'🇺🇸',color:'#3b82f6',mil:9,eco:8,tech:9,money:500,desc:'Militärmacht, High-Tech',buildRate:.7},
-  eu:{name:'Europa',flag:'🇪🇺',color:'#fbbf24',mil:6,eco:9,tech:8,money:450,desc:'Wirtschaft, Diplomatie',buildRate:.8},
-  russia:{name:'Russland',flag:'🇷🇺',color:'#ef4444',mil:8,eco:4,tech:5,money:300,desc:'Atomwaffen, rohe Gewalt',buildRate:.4},
-  china:{name:'China',flag:'🇨🇳',color:'#dc2626',mil:7,eco:8,tech:7,money:480,desc:'Produktion, Cyber-Krieg',buildRate:.9},
-  ukraine:{name:'Ukraine',flag:'🇺🇦',color:'#22c55e',mil:5,eco:3,tech:5,money:200,desc:'Widerstand, Verteidigung',buildRate:.5},
+  usa:{name:'USA',flag:'🇺🇸',color:'#3b82f6',mil:9,eco:8,tech:9,money:500,desc:'Militärmacht, High-Tech',buildRate:.8,personality:'aggressive'},
+  eu:{name:'Europa',flag:'🇪🇺',color:'#fbbf24',mil:6,eco:9,tech:8,money:450,desc:'Wirtschaft, Diplomatie',buildRate:.9,personality:'diplomatic'},
+  russia:{name:'Russland',flag:'🇷🇺',color:'#ef4444',mil:8,eco:4,tech:5,money:300,desc:'Atomwaffen, rohe Gewalt',buildRate:.5,personality:'aggressive'},
+  china:{name:'China',flag:'🇨🇳',color:'#dc2626',mil:7,eco:8,tech:7,money:480,desc:'Produktion, Cyber-Krieg',buildRate:1.0,personality:'expansive'},
+  ukraine:{name:'Ukraine',flag:'🇺🇦',color:'#22c55e',mil:5,eco:3,tech:5,money:200,desc:'Widerstand, Verteidigung',buildRate:.6,personality:'defensive'},
 };
 const MAP_POS={usa:{x:.18,y:.35},eu:{x:.47,y:.28},russia:{x:.62,y:.22},china:{x:.72,y:.38},ukraine:{x:.53,y:.30}};
 const BLDS={
@@ -66,14 +67,11 @@ const ALLY_MAP={usa:['eu','ukraine'],eu:['usa','ukraine'],russia:['china'],china
 
 // ====== GAME STATE ======
 let G={mode:'menu',nation:null,lastT:0,selected:'factory',mouseX:0,mouseY:0,shake:0,flash:0,flashColor:'',
-  // Player state
   money:0,income:0,mil:0,tech:0,defense:0,offense:0,buildings:[],
-  // AI state per nation
   ai:{},hostility:{},allies:[],enemyNations:[],
-  // Turn system
   turn:0,turnTimer:0,turnLength:12,
-  // Visual
   particles:[],texts:[],threats:[],attackScene:null,sceneTimer:0,log:[],
+  aiBuildAnims:[],aiMissiles:[],aiExplosions:[],
 };
 
 // ====== HELPERS ======
@@ -90,35 +88,76 @@ function createAIState(key){
     money:n.money,income:10+n.eco*2,mil:n.mil*2,tech:0,
     defense:n.mil,offense:0,
     buildings:[],buildTimer:0,
-    buildRate:n.buildRate, // how fast AI builds
-    nextBuild:null,nextBuildTimer:0,
+    buildRate:n.buildRate,
+    personality:n.personality,
+    upgradeTimer:0,upgradeCooldown:20,
+    // Track building counts for strategy
+    lastBuildType:null,
+    totalBuilt:0,
   };
 }
 
-// ====== AI LOGIC ======
+// ====== AI PERSONALITY-BASED BUILDING ======
 function aiPickBuild(key){
   const ai=G.ai[key];const n=NATIONS[key];
-  const r=Math.random();
-  // Priorities: economy first, then military, then defense/offense
   const factories=ai.buildings.filter(b=>b.type==='factory').length;
   const mils=ai.buildings.filter(b=>b.type==='milbase').length;
   const labs=ai.buildings.filter(b=>b.type==='lab').length;
   const defs=ai.buildings.filter(b=>b.type==='defense').length;
   const silos=ai.buildings.filter(b=>b.type==='silo').length;
+  const totalBuildings=ai.buildings.length;
 
-  // Strategic AI: build what you need most
-  if(factories<2&&ai.money>=60)return'factory';
-  if(mils<1&&ai.money>=80)return'milbase';
-  if(factories<mils+2&&ai.money>=60)return'factory';
-  if(defs<1&&ai.money>=100)return'defense';
-  if(mils<2&&ai.money>=80)return'milbase';
-  if(labs<1&&ai.money>=70)return'lab';
-  if(silos<1&&ai.money>=150)return'silo';
-  if(r<.4)return'factory';
-  if(r<.65)return'milbase';
-  if(r<.8)return'lab';
-  if(r<.9)return'defense';
-  return'silo';
+  // Personality-based strategy
+  switch(ai.personality){
+    case 'aggressive':
+      // Rush military, then factories, some defense
+      if(factories<1&&ai.money>=60)return'factory';
+      if(mils<2&&ai.money>=80)return'milbase';
+      if(factories<mils&&ai.money>=60)return'factory';
+      if(silos<1&&ai.money>=150)return'silo';
+      if(mils<4&&ai.money>=80)return'milbase';
+      if(defs<1&&ai.money>=100)return'defense';
+      if(labs<1&&ai.money>=70)return'lab';
+      if(Math.random()<.4)return'milbase';
+      return'factory';
+
+    case 'defensive':
+      // Build defense and economy first
+      if(factories<2&&ai.money>=60)return'factory';
+      if(defs<2&&ai.money>=100)return'defense';
+      if(mils<1&&ai.money>=80)return'milbase';
+      if(labs<1&&ai.money>=70)return'lab';
+      if(factories<4&&ai.money>=60)return'factory';
+      if(defs<3&&ai.money>=100)return'defense';
+      if(silos<1&&ai.money>=150)return'silo';
+      return Math.random()<.5?'defense':'factory';
+
+    case 'diplomatic':
+      // Economy and tech focused
+      if(factories<3&&ai.money>=60)return'factory';
+      if(labs<2&&ai.money>=70)return'lab';
+      if(defs<1&&ai.money>=100)return'defense';
+      if(mils<1&&ai.money>=80)return'milbase';
+      if(factories<5&&ai.money>=60)return'factory';
+      if(defs<2&&ai.money>=100)return'defense';
+      if(Math.random()<.3)return'lab';
+      return'factory';
+
+    case 'expansive':
+      // Build everything fast, maximize production
+      if(factories<mils+2&&ai.money>=60)return'factory';
+      if(mils<2&&ai.money>=80)return'milbase';
+      if(labs<mils&&ai.money>=70)return'lab';
+      if(factories<3&&ai.money>=60)return'factory';
+      if(defs<2&&ai.money>=100)return'defense';
+      if(silos<1&&ai.money>=150)return'silo';
+      if(Math.random()<.3)return'factory';
+      if(Math.random()<.5)return'milbase';
+      return'lab';
+  }
+  // Fallback
+  const r=Math.random();
+  if(r<.4)return'factory';if(r<.65)return'milbase';if(r<.8)return'lab';if(r<.9)return'defense';return'silo';
 }
 
 function aiBuild(key){
@@ -127,65 +166,115 @@ function aiBuild(key){
   const spec=BLDS[type];
   if(!spec||ai.money<spec.cost)return;
 
-  // Place building near nation core
+  // Place building near nation core with spread pattern
   const cx_=pos.x*W,cy_=pos.y*H;
-  const angle=Math.random()*7;
-  const dist=30+Math.random()*120;
-  const bx=cx_+Math.cos(angle)*dist;
-  const by=cy_+Math.sin(angle)*dist;
+  // Place in a spiral-ish pattern for better distribution
+  const buildingIndex=ai.buildings.length;
+  const ring=Math.floor(buildingIndex/6);
+  const angleInRing=(buildingIndex%6)/6*Math.PI*2+ring*0.5;
+  const dist=35+ring*30+rnd(-10,10);
+  const bx=cx_+Math.cos(angleInRing)*dist;
+  const by=cy_+Math.sin(angleInRing)*dist;
 
-  // Check no overlap
+  // Check no overlap with existing buildings
   for(const b of ai.buildings){if(Math.hypot(b.x-bx,b.y-by)<25)return}
 
   ai.money-=spec.cost;
-  ai.buildings.push({type,x:bx,y:by,level:1,hp:100});
+  ai.buildings.push({type,x:bx,y:by,level:1,hp:100,maxHp:100,builtAt:Date.now()});
+  ai.totalBuilt++;
 
   // Apply effects
   if(type==='milbase')ai.mil+=3;
   if(type==='defense')ai.defense+=5;
   if(type==='silo')ai.offense+=15;
 
-  // Show on map
-  burst(bx,by,spec.color,10,.8);
+  // Show build animation on map!
+  G.aiBuildAnims.push({x:bx,y:by,color:n.color,type,nation:key,timer:0,duration:1.5});
+  burst(bx,by,n.color,15,.8);
+  burst(bx,by,spec.color,8,.6);
+  floatText(bx,by-30,`${n.flag}${spec.label}`,n.color);
 
-  // Log only if player can see (nearby or intel)
-  if(Math.random()<.5){
-    addLog(`📡 Intel: ${n.flag} baut ${spec.label}`,'y');
-  }
+  // Always show intel (was 50% chance before)
+  addLog(`📡 Intel: ${n.flag} baut ${spec.label} (${ai.buildings.length} Gebäude)`,'y');
+  playBuildAI();
+}
+
+// AI can upgrade buildings
+function aiUpgrade(key){
+  const ai=G.ai[key];const n=NATIONS[key];
+  if(ai.buildings.length===0)return;
+
+  // Find a building to upgrade (level < 3)
+  const upgradeable=ai.buildings.filter(b=>b.level<3);
+  if(upgradeable.length===0)return;
+
+  const b=upgradeable[Math.floor(Math.random()*upgradeable.length)];
+  const spec=BLDS[b.type];
+  const upgradeCost=Math.floor(spec.cost*b.level*0.8);
+  if(ai.money<upgradeCost)return;
+
+  ai.money-=upgradeCost;
+  b.level++;
+  b.hp=100*b.level;
+  b.maxHp=100*b.level;
+
+  // Apply upgrade effects
+  if(b.type==='milbase')ai.mil+=2;
+  if(b.type==='defense')ai.defense+=3;
+  if(b.type==='silo')ai.offense+=10;
+
+  // Visual feedback
+  G.aiBuildAnims.push({x:b.x,y:b.y,color:n.color,type:'upgrade',nation:key,timer:0,duration:1});
+  burst(b.x,b.y,'#ffffff',10,.6);
+  floatText(b.x,b.y-25,`⬆ Lvl ${b.level}`,n.color);
+  addLog(`📡 Intel: ${n.flag} verbessert ${spec.label} → Lvl ${b.level}`,'y');
 }
 
 function updateAI(key,dt){
   const ai=G.ai[key];const n=NATIONS[key];
   if(!ai)return;
 
-  // Income from factories
-  const facs=ai.buildings.filter(b=>b.type==='factory').length;
-  ai.income=10+n.eco*2+facs*15;
+  // Income from factories (with level bonus)
+  const facs=ai.buildings.filter(b=>b.type==='factory');
+  const facIncome=facs.reduce((s,b)=>s+15*b.level,0);
+  ai.income=10+n.eco*2+facIncome;
   ai.money+=ai.income*dt;
 
-  // Tech from labs
-  const labs=ai.buildings.filter(b=>b.type==='lab').length;
-  ai.tech+=labs*2*dt;
+  // Tech from labs (with level bonus)
+  const labs=ai.buildings.filter(b=>b.type==='lab');
+  const labTech=labs.reduce((s,b)=>s+2*b.level,0);
+  ai.tech+=labTech*dt;
 
-  // Mil growth from bases
-  const mils=ai.buildings.filter(b=>b.type==='milbase').length;
-  ai.mil+=(0.5+mils*0.5)*dt;
+  // Mil growth from bases (with level bonus)
+  const mils=ai.buildings.filter(b=>b.type==='milbase');
+  const milGrowth=mils.reduce((s,b)=>s+0.5*b.level,0);
+  ai.mil+=(0.5+milGrowth)*dt;
 
-  // Recalc defense/offense
-  const defs=ai.buildings.filter(b=>b.type==='defense').length;
-  const silos=ai.buildings.filter(b=>b.type==='silo').length;
-  ai.defense=n.mil+defs*5;
-  ai.offense=silos*15;
+  // Recalc defense/offense with levels
+  const defs=ai.buildings.filter(b=>b.type==='defense');
+  const defTotal=defs.reduce((s,b)=>s+5*b.level,0);
+  const silos=ai.buildings.filter(b=>b.type==='silo');
+  const siloTotal=silos.reduce((s,b)=>s+15*b.level,0);
+  ai.defense=n.mil+defTotal;
+  ai.offense=siloTotal;
 
-  // AI building timer
+  // AI building timer (faster with higher buildRate and more money)
   ai.buildTimer+=dt;
-  const buildInterval=8/ai.buildRate; // faster nations build more often
+  const moneyBoost=ai.money>500?0.7:ai.money>300?0.85:1;
+  const buildInterval=7/ai.buildRate*moneyBoost;
   if(ai.buildTimer>=buildInterval){
     ai.buildTimer=0;
     aiBuild(key);
   }
 
-  // AI may attack if hostile enough (handled in processTurn)
+  // AI upgrade timer
+  ai.upgradeTimer+=dt;
+  if(ai.upgradeTimer>=ai.upgradeCooldown&&ai.buildings.length>=3){
+    ai.upgradeTimer=0;
+    aiUpgrade(key);
+  }
+
+  // AI may attack (handled in processTurn)
 }
 
 // ====== COUNTRY SELECTION ======
@@ -194,8 +283,8 @@ function drawCountrySelect(){
   cx.textAlign='center';
   cx.fillStyle='#00d9ff';cx.font='900 64px Arial';cx.fillText('NEON COMMAND',W/2,H*.1);
   cx.fillStyle='#ff2bd6';cx.font='900 32px Arial';cx.fillText('GEOPOLITIK',W/2,H*.1+45);
-  cx.fillStyle='#aaa';cx.font='14px Arial';cx.fillText('Wähle deine Nation – Alle Nationen bauen und kämpfen!',W/2,H*.1+75);
-  const keys=Object.keys(NATIONS);const cardW=150,cardH=170,gap=14;
+  cx.fillStyle='#aaa';cx.font='14px Arial';cx.fillText('Wähle deine Nation – Alle Nationen bauen, kämpfen und entwickeln sich!',W/2,H*.1+75);
+  const keys=Object.keys(NATIONS);const cardW=150,cardH=190,gap=14;
   const totalW=keys.length*cardW+(keys.length-1)*gap;const startX=(W-totalW)/2;const startY=H*.24;
   keys.forEach((k,i)=>{
     const n=NATIONS[k];const x=startX+i*(cardW+gap);
@@ -208,8 +297,11 @@ function drawCountrySelect(){
     cx.fillText(`Mil ${'█'.repeat(n.mil)}${'░'.repeat(10-n.mil)}`,x+cardW/2,startY+88);
     cx.fillText(`Öko ${'█'.repeat(n.eco)}${'░'.repeat(10-n.eco)}`,x+cardW/2,startY+103);
     cx.fillText(`Tech ${'█'.repeat(n.tech)}${'░'.repeat(10-n.tech)}`,x+cardW/2,startY+118);
+    // Show personality
+    const pLabel={aggressive:'⚔️ Aggressiv',defensive:'🛡️ Defensiv',diplomatic:'🤝 Diplomatisch',expansive:'📈 Expansiv'}[n.personality]||'';
+    cx.fillStyle=n.color;cx.font='10px Arial';cx.fillText(pLabel,x+cardW/2,startY+138);
     cx.fillStyle='#888';cx.font='9px Arial';
-    const words=n.desc.split(' ');let line='',ly=startY+140;
+    const words=n.desc.split(' ');let line='',ly=startY+155;
     for(const w of words){if((line+' '+w).length>20){cx.fillText(line.trim(),x+cardW/2,ly);ly+=11;line=w}else{line+=' '+w}}
     if(line)cx.fillText(line.trim(),x+cardW/2,ly);
   });
@@ -221,36 +313,55 @@ function selectNation(key){
   G.nation=key;G.money=n.money;G.mil=n.mil*2;G.income=10+n.eco*2;
   G.defense=n.mil;G.offense=0;G.tech=0;G.buildings=[];
   G.mode='playing';G.turn=0;G.turnTimer=0;
-
-  // Setup AI for all other nations
-  G.ai={};G.hostility={};
+  G.ai={};G.hostility={};G.aiBuildAnims=[];G.aiMissiles=[];G.aiExplosions=[];
   for(const k of Object.keys(NATIONS)){
     if(k!==key)G.ai[k]=createAIState(k);
     G.hostility[k]=k===key?0:10+rnd(0,20);
   }
-
   G.allies=ALLY_MAP[key]||[];
   G.enemyNations=Object.keys(NATIONS).filter(k=>k!==key);
   G.allies.forEach(a=>G.hostility[a]=Math.max(0,G.hostility[a]-15));
-
   addLog(`${n.flag} ${n.name} gewählt!`,'g');
   addLog(`Militär: ${n.mil} | Wirtschaft: ${n.eco} | Tech: ${n.tech}`,'c');
   addLog('Alle Nationen bauen und entwickeln sich!','y');
-  addLog('Baue Fabriken, dann Verteidigung!','y');
+  addLog('Baue Fabriken für Geld, dann Verteidigung!','y');
   playBuild();
 }
 
 // ====== DRAWING ======
-function drawBuilding(b,alpha=1){
+function drawBuilding(b,alpha=1,nationColor=null){
   const spec=BLDS[b.type];if(!spec)return;
+  const age=b.builtAt?Math.min(1,(Date.now()-b.builtAt)/500):1; // build-in animation
   const pulse=1+Math.sin(Date.now()*.003+b.x)*.1;
-  cx.save();cx.shadowColor=spec.color;cx.shadowBlur=8*pulse;
-  cx.fillStyle=spec.color;cx.globalAlpha=alpha*.85;
-  if(b.type==='factory'){cx.fillRect(b.x-9,b.y-9,18,18);cx.fillStyle='#000';cx.font='bold 11px Arial';cx.textAlign='center';cx.fillText('$',b.x,b.y+4)}
-  else if(b.type==='milbase'){cx.beginPath();cx.moveTo(b.x,b.y-12);cx.lineTo(b.x+11,b.y+8);cx.lineTo(b.x-11,b.y+8);cx.closePath();cx.fill();cx.fillStyle='#000';cx.font='9px Arial';cx.textAlign='center';cx.fillText('M',b.x,b.y+4)}
-  else if(b.type==='lab'){cx.beginPath();cx.moveTo(b.x,b.y-11);cx.lineTo(b.x+9,b.y);cx.lineTo(b.x,b.y+11);cx.lineTo(b.x-9,b.y);cx.closePath();cx.fill();cx.fillStyle='#000';cx.font='9px Arial';cx.textAlign='center';cx.fillText('T',b.x,b.y+4)}
-  else if(b.type==='defense'){cx.beginPath();cx.arc(b.x,b.y,11,0,7);cx.fill();cx.fillStyle='#000';cx.font='bold 9px Arial';cx.textAlign='center';cx.fillText('D',b.x,b.y+3)}
-  else if(b.type==='silo'){cx.fillRect(b.x-5,b.y-12,10,24);cx.fillStyle='#000';cx.font='9px Arial';cx.textAlign='center';cx.fillText('R',b.x,b.y+3)}
+  const levelScale=1+(b.level-1)*.12; // bigger at higher levels
+  cx.save();
+  cx.shadowColor=nationColor||spec.color;
+  cx.shadowBlur=(8*pulse+(b.level-1)*4)*age;
+  cx.fillStyle=nationColor||spec.color;
+  cx.globalAlpha=alpha*age*.9;
+  const s=levelScale*age;
+  cx.translate(b.x,b.y);cx.scale(s,s);
+  if(b.type==='factory'){
+    cx.fillRect(-9,-9,18,18);cx.fillStyle='#000';cx.font='bold 11px Arial';cx.textAlign='center';cx.fillText('$',0,4);
+    if(b.level>1){cx.fillStyle=spec.color;cx.font='bold 7px Arial';cx.fillText(b.level,7,-6)}
+  }else if(b.type==='milbase'){
+    cx.beginPath();cx.moveTo(0,-12);cx.lineTo(11,8);cx.lineTo(-11,8);cx.closePath();cx.fill();
+    cx.fillStyle='#000';cx.font='9px Arial';cx.textAlign='center';cx.fillText('M',0,4);
+    if(b.level>1){cx.fillStyle=spec.color;cx.font='bold 7px Arial';cx.fillText(b.level,7,-6)}
+  }else if(b.type==='lab'){
+    cx.beginPath();cx.moveTo(0,-11);cx.lineTo(9,0);cx.lineTo(0,11);cx.lineTo(-9,0);cx.closePath();cx.fill();
+    cx.fillStyle='#000';cx.font='9px Arial';cx.textAlign='center';cx.fillText('T',0,4);
+    if(b.level>1){cx.fillStyle=spec.color;cx.font='bold 7px Arial';cx.fillText(b.level,7,-6)}
+  }else if(b.type==='defense'){
+    cx.beginPath();cx.arc(0,0,11,0,7);cx.fill();
+    cx.fillStyle='#000';cx.font='bold 9px Arial';cx.textAlign='center';cx.fillText('D',0,3);
+    if(b.level>1){cx.fillStyle=spec.color;cx.font='bold 7px Arial';cx.fillText(b.level,7,-6)}
+    // Shield ring for defense
+    cx.strokeStyle=nationColor||spec.color;cx.lineWidth=1+b.level;cx.globalAlpha=alpha*age*.3;cx.beginPath();cx.arc(0,0,14+b.level*2,0,7);cx.stroke();
+  }else if(b.type==='silo'){
+    cx.fillRect(-5,-12,10,24);cx.fillStyle='#000';cx.font='9px Arial';cx.textAlign='center';cx.fillText('R',0,3);
+    if(b.level>1){cx.fillStyle=spec.color;cx.font='bold 7px Arial';cx.fillText(b.level,5,-8)}
+  }
   cx.textAlign='left';cx.globalAlpha=1;cx.restore();
 }
 
@@ -275,20 +386,51 @@ function drawWorldMap(){
   drawContinent(.5,.12,.25,.2,'#1a2744');drawContinent(.65,.25,.12,.22,'#1a2744');
   drawContinent(.52,.35,.08,.1,'#1a2744');cx.restore();
 
-  // Draw ALL nation buildings (player + AI)
   if(G.nation){
-    // Player buildings
-    for(const b of G.buildings)drawBuilding(b,1);
-    // AI buildings (dimmer)
+    // Draw AI build zones (subtle circles)
     for(const k of G.enemyNations){
-      const ai=G.ai[k];if(!ai)continue;
-      for(const b of ai.buildings)drawBuilding(b,.5);
+      const ai=G.ai[k];if(!ai||ai.buildings.length===0)continue;
+      const pos=MAP_POS[k];const n=NATIONS[k];
+      const maxRing=Math.floor(ai.buildings.length/6)+1;
+      const zoneRadius=35+maxRing*30+20;
+      cx.save();cx.strokeStyle=n.color+'15';cx.lineWidth=1;cx.setLineDash([4,6]);
+      cx.beginPath();cx.arc(pos.x*W,pos.y*H,zoneRadius,0,7);cx.stroke();cx.setLineDash([]);cx.restore();
     }
 
-    // Build zone circle
+    // Draw player build zone circle
     const cp=MAP_POS[G.nation];
-    cx.save();cx.strokeStyle=NATIONS[G.nation].color+'22';cx.lineWidth=1;cx.setLineDash([6,6]);
+    cx.save();cx.strokeStyle=NATIONS[G.nation].color+'33';cx.lineWidth=1.5;cx.setLineDash([6,6]);
     cx.beginPath();cx.arc(cp.x*W,cp.y*H,180,0,7);cx.stroke();cx.setLineDash([]);cx.restore();
+
+    // Draw ALL AI buildings with nation colors
+    for(const k of G.enemyNations){
+      const ai=G.ai[k];if(!ai)continue;
+      const n=NATIONS[k];
+      for(const b of ai.buildings){
+        // Draw connection line to core (subtle)
+        cx.save();cx.strokeStyle=n.color+'0a';cx.lineWidth=1;
+        cx.beginPath();cx.moveTo(b.x,b.y);cx.lineTo(MAP_POS[k].x*W,MAP_POS[k].y*H);cx.stroke();cx.restore();
+        drawBuilding(b,.65,n.color);
+      }
+    }
+
+    // Draw player buildings
+    for(const b of G.buildings)drawBuilding(b,1,NATIONS[G.nation].color);
+
+    // Draw AI build animations (expanding rings)
+    for(const a of G.aiBuildAnims){
+      const progress=a.timer/a.duration;
+      const radius=30*progress;
+      const alpha=1-progress;
+      cx.save();cx.strokeStyle=a.color;cx.globalAlpha=alpha*.6;cx.lineWidth=2;
+      cx.beginPath();cx.arc(a.x,a.y,radius,0,7);cx.stroke();
+      cx.globalAlpha=alpha*.3;cx.fillStyle=a.color;
+      cx.beginPath();cx.arc(a.x,a.y,radius*.5,0,7);cx.fill();cx.restore();
+      if(a.type==='upgrade'){
+        cx.save();cx.strokeStyle='#ffffff';cx.globalAlpha=alpha*.5;cx.lineWidth=1;
+        cx.beginPath();cx.arc(a.x,a.y,radius*1.5,0,7);cx.stroke();cx.restore();
+      }
+    }
 
     // Ghost building at cursor
     if(G.selected&&canBuild(G.selected,G.mouseX,G.mouseY)){
@@ -303,10 +445,23 @@ function drawWorldMap(){
     }else if(G.selected){cx.save();cx.globalAlpha=.25;cx.fillStyle='#ff345d';cx.beginPath();cx.arc(G.mouseX,G.mouseY,12,0,7);cx.fill();cx.restore()}
   }
 
+  // Draw AI vs AI missiles
+  for(const m of G.aiMissiles){
+    cx.save();cx.shadowColor=m.color;cx.shadowBlur=10;cx.fillStyle=m.color;
+    const angle=Math.atan2(m.vy,m.vx);cx.translate(m.x,m.y);cx.rotate(angle);
+    cx.fillRect(-8,-2,16,4);cx.fillStyle='#ffb000';cx.fillRect(8,-1,4,2);cx.restore();
+  }
+  for(const e of G.aiExplosions){
+    const a=e.life/e.max;cx.save();
+    const eg=cx.createRadialGradient(e.x,e.y,0,e.x,e.y,e.size*a);
+    eg.addColorStop(0,'rgba(255,200,50,'+a+')');eg.addColorStop(.4,'rgba(255,100,30,'+(a*.6)+')');eg.addColorStop(1,'rgba(255,50,50,0)');
+    cx.fillStyle=eg;cx.beginPath();cx.arc(e.x,e.y,e.size*a,0,7);cx.fill();cx.restore();
+  }
+
   // Nation markers
   for(const[k,pos]of Object.entries(MAP_POS)){
     const px=pos.x*W,py=pos.y*H,n=NATIONS[k],isP=k===G.nation,h=G.hostility[k]||0;
-    const ai=G.ai[k];const bCount=ai?ai.buildings.length:0;
+    const ai=G.ai[k];const bCount=ai?ai.buildings.length:G.buildings.length;
     const radius=isP?50:h>50?35:h>30?28:22;
     cx.save();
     const glow=cx.createRadialGradient(px,py,0,px,py,radius);
@@ -324,10 +479,14 @@ function drawWorldMap(){
     cx.fillStyle=isP?n.color:'#aaa';
     cx.fillText(`${n.flag} ${n.name}`,px,py-18);
 
-    // Building count + stats
+    // Building count + stats under nation
     if(!isP&&ai){
       cx.font='8px Arial';cx.fillStyle='#888';
-      cx.fillText(`🏭${bCount} ⚔️${Math.floor(ai.mil)} 🛡️${Math.floor(ai.defense)}`,px,py+38);
+      cx.fillText(`🏭${bCount} ⚔️${Math.floor(ai.mil)} 🛡️${Math.floor(ai.defense)} 💰${Math.floor(ai.money)}$`,px,py+38);
+      // Show personality indicator
+      const pIcon={aggressive:'⚔️',defensive:'🛡️',diplomatic:'🤝',expansive:'📈'}[ai.personality]||'';
+      cx.fillStyle='#666';cx.font='8px Arial';
+      cx.fillText(pIcon,px,py+48);
     }
 
     if(!isP){
@@ -403,7 +562,7 @@ function build(type,mx,my){
     playAlert();return;
   }
   const spec=BLDS[type];G.money-=spec.cost;
-  G.buildings.push({type,x:mx,y:my,level:1,hp:100});
+  G.buildings.push({type,x:mx,y:my,level:1,hp:100,maxHp:100,builtAt:Date.now()});
   burst(mx,my,spec.color,20,1.2);floatText(mx,my-30,`${spec.label}!`,spec.color);
   addLog(`🏗️ ${spec.label} gebaut! (-${spec.cost}$)`,'g');playBuild();
   if(type==='milbase')G.mil+=3;
@@ -442,12 +601,14 @@ function resolveAttack(fromKey,strength){
     if(damage>20&&G.buildings.length>0){const idx=Math.floor(Math.random()*G.buildings.length);addLog(`🏚️ ${BLDS[G.buildings[idx].type].label} zerstört!`,'r');G.buildings.splice(idx,1)}
     G.shake=15;G.flash=1;G.flashColor='#ff345d';playBoom(.6);
   }else{addLog(`🛡️ ${n.flag} Angriff abgewehrt!`,'g');G.hostility[fromKey]=Math.max(0,G.hostility[fromKey]-5);playBuild()}
-  // Counter with silos
   if(G.offense>0&&damage>0){
     const counter=Math.floor(G.offense*.8);
     G.hostility[fromKey]=Math.max(0,G.hostility[fromKey]-counter*.3);
-    // Destroy AI building
-    if(ai&&ai.buildings.length>0){const idx=Math.floor(Math.random()*ai.buildings.length);const b=ai.buildings[idx];burst(b.x,b.y,'#a855f7',20,1.5);floatText(b.x,b.y-25,'ZERSTÖRT!','#a855f7');addLog(`🚀 Gegenangriff zerstört ${n.flag} ${BLDS[b.type].label}!`,'p');ai.buildings.splice(idx,1)}
+    if(ai&&ai.buildings.length>0){
+      const idx=Math.floor(Math.random()*ai.buildings.length);const b=ai.buildings[idx];
+      burst(b.x,b.y,'#a855f7',20,1.5);floatText(b.x,b.y-25,'ZERSTÖRT!','#a855f7');
+      addLog(`🚀 Gegenangriff zerstört ${n.flag} ${BLDS[b.type].label}!`,'p');ai.buildings.splice(idx,1);
+    }
     addLog(`🚀 Gegenangriff auf ${n.flag} ${n.name}!`,'p');playBoom(.3);
   }
 }
@@ -459,9 +620,54 @@ function counterAttack(targetKey){
   const from=MAP_POS[G.nation],to=MAP_POS[targetKey];
   burst(from.x*W,from.y*H,'#a855f7',25,1.5);burst(to.x*W,to.y*H,'#ff345d',30,1.5);
   G.shake=10;G.flash=.6;G.flashColor='#a855f7';playBoom(.5);
-  // Destroy random AI building
   if(ai&&ai.buildings.length>0){const idx=Math.floor(Math.random()*ai.buildings.length);const b=ai.buildings[idx];burst(b.x,b.y,'#ff345d',20,1.5);floatText(b.x,b.y-25,'BOOM!','#ff345d');addLog(`🚀 ${BLDS[b.type].label} von ${n.flag} zerstört!`,'p');ai.buildings.splice(idx,1)}
   addLog(`🚀 Gegenangriff auf ${n.flag} ${n.name}!`,'p');
+}
+
+// ====== AI vs AI COMBAT (visual!) ======
+function aiVsAiAttack(attackerKey,defenderKey){
+  const atkN=NATIONS[attackerKey],defN=NATIONS[defenderKey];
+  const atkAi=G.ai[attackerKey],defAi=G.ai[defenderKey];
+  if(!atkAi||!defAi)return;
+
+  const from=MAP_POS[attackerKey],to=MAP_POS[defenderKey];
+  const fx=from.x*W,fy=from.y*H,tx=to.x*W,ty=to.y*H;
+  const angle=Math.atan2(ty-fy,tx-fx);
+
+  // Launch visual missiles between the two nations
+  const count=Math.min(4,Math.floor(atkAi.mil/15)+1);
+  for(let i=0;i<count;i++){
+    setTimeout(()=>{
+      const m={x:fx+rnd(-15,15),y:fy+rnd(-15,15),
+        vx:Math.cos(angle)*180+rnd(-15,15),vy:Math.sin(angle)*180+rnd(-15,15),
+        color:atkN.color,life:2.5,max:2.5};
+      G.aiMissiles.push(m);
+    },i*300);
+  }
+
+  // Explosion at target after delay
+  const travelTime=Math.hypot(tx-fx,ty-fy)/180;
+  setTimeout(()=>{
+    const ex=tx+rnd(-40,40),ey=ty+rnd(-40,40);
+    G.aiExplosions.push({x:ex,y:ey,life:1.2,max:1.2,size:rnd(20,50)});
+    burst(ex,ey,defN.color,12,.8);burst(ex,ey,'#ffb000',8,.6);
+
+    // Calculate damage
+    const atkPower=atkAi.mil*0.6;
+    const defPower=defAi.defense*1.2;
+    const dmg=Math.max(0,atkPower-defPower);
+    if(dmg>5&&defAi.buildings.length>0){
+      const idx=Math.floor(Math.random()*defAi.buildings.length);
+      const b=defAi.buildings[idx];
+      floatText(b.x,b.y-20,'💥',atkN.color);
+      defAi.buildings.splice(idx,1);
+      defAi.mil=Math.max(0,defAi.mil-dmg*0.3);
+      addLog(`⚔️ ${atkN.flag} vs ${defN.flag}: ${BLDS[b.type].label} zerstört!`,'y');
+    }else{
+      addLog(`⚔️ ${atkN.flag} vs ${defN.flag}: Angriff abgewehrt!`,'c');
+    }
+    playBoom(.15);
+  },(travelTime+0.5)*1000);
 }
 
 // ====== GAME LOGIC ======
@@ -469,13 +675,22 @@ function updateGame(dt){
   if(G.mode!=='playing')return;
   G.turnTimer+=dt;
 
-  // Player income
-  const facs=G.buildings.filter(b=>b.type==='factory').length;
-  G.income=10+NATIONS[G.nation].eco*2+facs*15;G.money+=G.income*dt;
-  const labs=G.buildings.filter(b=>b.type==='lab').length;G.tech+=labs*2*dt;
-  const mils=G.buildings.filter(b=>b.type==='milbase').length;G.mil+=(.5+mils*.5)*dt;
-  const defs=G.buildings.filter(b=>b.type==='defense').length;G.defense=NATIONS[G.nation].mil+defs*5;
-  const silos=G.buildings.filter(b=>b.type==='silo').length;G.offense=silos*15;
+  // Player income with level bonuses
+  const facs=G.buildings.filter(b=>b.type==='factory');
+  const facIncome=facs.reduce((s,b)=>s+15*b.level,0);
+  G.income=10+NATIONS[G.nation].eco*2+facIncome;G.money+=G.income*dt;
+  const labs=G.buildings.filter(b=>b.type==='lab');
+  const labTech=labs.reduce((s,b)=>s+2*b.level,0);
+  G.tech+=labTech*dt;
+  const mils=G.buildings.filter(b=>b.type==='milbase');
+  const milGrowth=mils.reduce((s,b)=>s+0.5*b.level,0);
+  G.mil+=(0.5+milGrowth)*dt;
+  const defs=G.buildings.filter(b=>b.type==='defense');
+  const defTotal=defs.reduce((s,b)=>s+5*b.level,0);
+  const silos=G.buildings.filter(b=>b.type==='silo');
+  const siloTotal=silos.reduce((s,b)=>s+15*b.level,0);
+  G.defense=NATIONS[G.nation].mil+defTotal;
+  G.offense=siloTotal;
 
   // AI updates
   for(const k of G.enemyNations){updateAI(k,dt)}
@@ -498,6 +713,19 @@ function updateGame(dt){
     for(let i=(G.attackScene.explosions||[]).length-1;i>=0;i--){G.attackScene.explosions[i].life-=dt;if(G.attackScene.explosions[i].life<=0)G.attackScene.explosions.splice(i,1)}
     if(G.sceneTimer<=0)G.attackScene=null}
 
+  // AI build animations
+  for(let i=G.aiBuildAnims.length-1;i>=0;i--){G.aiBuildAnims[i].timer+=dt;if(G.aiBuildAnims[i].timer>=G.aiBuildAnims[i].duration)G.aiBuildAnims.splice(i,1)}
+
+  // AI missiles
+  for(let i=G.aiMissiles.length-1;i>=0;i--){
+    const m=G.aiMissiles[i];m.x+=m.vx*dt;m.y+=m.vy*dt;m.life-=dt;
+    if(m.life<=0)G.aiMissiles.splice(i,1);
+  }
+  // AI explosions
+  for(let i=G.aiExplosions.length-1;i>=0;i--){
+    G.aiExplosions[i].life-=dt;if(G.aiExplosions[i].life<=0)G.aiExplosions.splice(i,1);
+  }
+
   // Particles
   for(let i=G.particles.length-1;i>=0;i--){const p=G.particles[i];p.x+=p.vx*dt;p.y+=p.vy*dt;p.vx*=.97;p.vy*=.97;p.life-=dt;if(p.life<=0)G.particles.splice(i,1)}
   for(let i=G.texts.length-1;i>=0;i--){G.texts[i].y-=35*dt;G.texts[i].life-=dt;if(G.texts[i].life<=0)G.texts.splice(i,1)}
@@ -508,21 +736,37 @@ function updateGame(dt){
 
 function processTurn(){
   addLog(`── Runde ${G.turn} ──`,'c');
-  // Random events
+  // Random events - trade with allies
   if(Math.random()<.15){const ally=G.allies[Math.floor(Math.random()*G.allies.length)];if(ally){const b=Math.floor(50+G.tech*2);G.money+=b;addLog(`${NATIONS[ally].flag} Handel: +${b}$`,'g')}}
-  // AI attacks
+
+  // AI attacks on player
   for(const k of G.enemyNations){
     const h=G.hostility[k];
     if(h>60&&Math.random()<h/200)launchAttack(k);
     if(h>80&&Math.random()<.3)launchAttack(k);
   }
-  // AI vs AI conflicts (log only)
-  if(Math.random()<.1){
-    const nonPlayer=G.enemyNations.filter(k=>!G.allies.includes(k));
+
+  // AI vs AI conflicts (now VISUAL!)
+  if(Math.random()<.15+G.turn*.01){
+    const nonPlayer=G.enemyNations;
     if(nonPlayer.length>=2){
       const a=nonPlayer[Math.floor(Math.random()*nonPlayer.length)];
-      const b=nonPlayer.filter(k=>k!==a)[Math.floor(Math.random()*(nonPlayer.length-1))];
-      if(b)addLog(`⚔️ ${NATIONS[a].flag} vs ${NATIONS[b].flag} – Grenzkonflikt!`,'y');
+      const possible=nonPlayer.filter(k=>k!==a&&!ALLY_MAP[a]?.includes(k));
+      if(possible.length>0){
+        const b=possible[Math.floor(Math.random()*possible.length)];
+        aiVsAiAttack(a,b);
+      }
+    }
+  }
+
+  // Intel reports about AI building activity
+  if(Math.random()<.3){
+    const randomNation=G.enemyNations[Math.floor(Math.random()*G.enemyNations.length)];
+    const ai=G.ai[randomNation];if(ai&&ai.buildings.length>0){
+      const n=NATIONS[randomNation];
+      const types={};ai.buildings.forEach(b=>{types[b.type]=(types[b.type]||0)+1});
+      const summary=Object.entries(types).map(([t,c])=>`${BLDS[t].label}×${c}`).join(', ');
+      addLog(`📡 ${n.flag} ${n.name}: ${summary} 💰${Math.floor(ai.money)}$`,'c');
     }
   }
 }
@@ -532,12 +776,13 @@ function drawHUD(){
   const el=document.getElementById('hud');
   if(G.mode==='menu'){el.innerHTML='<b style="color:#00d9ff">NEON COMMAND</b><br>Geopolitik';return}
   const n=NATIONS[G.nation];const nt=Math.max(0,Math.ceil(G.turnLength-G.turnTimer));
+  const aiBldCount=G.enemyNations.reduce((s,k)=>s+(G.ai[k]?.buildings.length||0),0);
   el.innerHTML=`<div style="font-size:13px;font-weight:900;color:${n.color}">${n.flag} ${n.name}</div>
-    <div>Geld <b style="color:#ffb000">${Math.floor(G.money)}$</b> <span style="color:#888">(+${G.income}/s)</span></div>
-    <div>Mil <b style="color:#ef4444">${Math.floor(G.mil)}</b> · Def <b style="color:#22c55e">${Math.floor(G.defense)}</b> · Off <b style="color:#a855f7">${Math.floor(G.offense)}</b></div>
+    <div>Geld <b style="color:#ffb000">${Math.floor(G.money)}$</b> <span style="color:#888">(+${Math.floor(G.income)}/s)</span></div>
+    <div>Mil <b style="color:#ef4444">${Math.floor(G.mil)}</b> · Def <b style="color:#22c55e">${Math.floor(G.defense)}</b> · Off <b style="color:#a855f7">${G.offense}</b></div>
     <div>Tech <b style="color:#3b82f6">${Math.floor(G.tech)}</b></div><hr>
     <div>Runde <b>${G.turn}</b> · Nächste in <b style="color:#00d9ff">${nt}s</b></div>
-    <div style="font-size:10px;color:#888">Gebäude: ${G.buildings.length}</div>`;
+    <div style="font-size:10px;color:#888">Deine Gebäude: ${G.buildings.length} | KI Gebäude: ${aiBldCount}</div>`;
 }
 
 function drawIntel(){
@@ -549,7 +794,11 @@ function drawIntel(){
     if(!ai)continue;
     const hCol=h>60?'#ff345d':h>30?'#ffb000':'#00ff9d';
     const status=G.allies.includes(k)?'ALLY':h>60?'FEIND':h>30?'SPANNUNG':'OK';
-    html+=`<div style="margin:3px 0">${n.flag} <span style="color:${hCol}">${status}</span> 🏭${ai.buildings.length} ⚔️${Math.floor(ai.mil)} 🛡️${Math.floor(ai.defense)}</div>`;
+    const pIcon={aggressive:'⚔️',defensive:'🛡️',diplomatic:'🤝',expansive:'📈'}[ai.personality]||'';
+    const types={};ai.buildings.forEach(b=>{types[b.type]=(types[b.type]||0)+1});
+    const bldSummary=Object.entries(types).map(([t,c])=>`${BLDS[t].symbol}${c}`).join(' ');
+    html+=`<div style="margin:3px 0;border-bottom:1px solid rgba(125,92,255,.1);padding-bottom:2px">${n.flag} <span style="color:${hCol}">${status}</span> ${pIcon}</div>`;
+    html+=`<div style="font-size:9px;color:#999;margin-bottom:3px">🏭${ai.buildings.length} ${bldSummary} | 💰${Math.floor(ai.money)}$</div>`;
   }
   el.innerHTML=html;
 }
@@ -600,7 +849,7 @@ cv.addEventListener('mousemove',e=>{G.mouseX=e.clientX;G.mouseY=e.clientY});
 cv.addEventListener('click',e=>{
   initAudio();
   if(G.mode==='menu'){
-    const keys=Object.keys(NATIONS);const cardW=150,cardH=170,gap=14;
+    const keys=Object.keys(NATIONS);const cardW=150,cardH=190,gap=14;
     const totalW=keys.length*cardW+(keys.length-1)*gap;const startX=(W-totalW)/2;const startY=H*.24;
     keys.forEach((k,i)=>{const x=startX+i*(cardW+gap);if(e.clientX>x&&e.clientX<x+cardW&&e.clientY>startY&&e.clientY<startY+cardH)selectNation(k)});
     return;
@@ -614,7 +863,8 @@ addEventListener('keydown',e=>{
       money:0,income:0,mil:0,tech:0,defense:0,offense:0,buildings:[],
       ai:{},hostility:{},allies:[],enemyNations:[],
       turn:0,turnTimer:0,turnLength:12,
-      particles:[],texts:[],threats:[],attackScene:null,sceneTimer:0,log:[]};return}
+      particles:[],texts:[],threats:[],attackScene:null,sceneTimer:0,log:[],
+      aiBuildAnims:[],aiMissiles:[],aiExplosions:[]};return}
   if(G.mode!=='playing')return;
   if(e.key==='1')G.selected='factory';if(e.key==='2')G.selected='milbase';if(e.key==='3')G.selected='lab';
   if(e.key==='4')G.selected='defense';if(e.key==='5')G.selected='silo';
