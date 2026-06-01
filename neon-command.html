@@ -68,7 +68,7 @@ const ALLY_MAP={usa:['eu','ukraine'],eu:['usa','ukraine'],russia:['china'],china
 // ====== GAME STATE ======
 let G={mode:'menu',nation:null,lastT:0,selected:'factory',mouseX:0,mouseY:0,shake:0,flash:0,flashColor:'',
   money:0,income:0,mil:0,tech:0,defense:0,offense:0,buildings:[],
-  ai:{},hostility:{},allies:[],enemyNations:[],
+  ai:{},hostility:{},allies:[],enemyNations:[],attackMode:false,
   turn:0,turnTimer:0,turnLength:12,
   particles:[],texts:[],threats:[],attackScene:null,sceneTimer:0,log:[],
   aiBuildAnims:[],aiMissiles:[],aiExplosions:[],
@@ -465,17 +465,28 @@ function drawWorldMap(){
   for(const[k,pos]of Object.entries(MAP_POS)){
     const px=pos.x*W,py=pos.y*H,n=NATIONS[k],isP=k===G.nation,h=G.hostility[k]||0;
     const ai=G.ai[k];const bCount=ai?ai.buildings.length:G.buildings.length;
+    const mouseNear=Math.hypot(G.mouseX-px,G.mouseY-py)<40;
+    const isAttackTarget=G.attackMode&&!isP&&!G.allies.includes(k)&&mouseNear;
     const radius=isP?50:h>50?35:h>30?28:22;
     cx.save();
     const glow=cx.createRadialGradient(px,py,0,px,py,radius);
-    if(isP){glow.addColorStop(0,n.color+'55');glow.addColorStop(1,n.color+'00')}
+    if(isAttackTarget){glow.addColorStop(0,'#a855f7aa');glow.addColorStop(1,'#a855f700')}
+    else if(isP){glow.addColorStop(0,n.color+'55');glow.addColorStop(1,n.color+'00')}
     else if(h>60){glow.addColorStop(0,'#ff345d44');glow.addColorStop(1,'#ff345d00')}
     else if(G.allies.includes(k)){glow.addColorStop(0,'#00ff9d33');glow.addColorStop(1,'#00ff9d00')}
     else{glow.addColorStop(0,'#ffffff11');glow.addColorStop(1,'#ffffff00')}
-    cx.fillStyle=glow;cx.beginPath();cx.arc(px,py,radius,0,7);cx.fill();cx.restore();
+    cx.fillStyle=glow;cx.beginPath();cx.arc(px,py,isAttackTarget?radius*1.5:radius,0,7);cx.fill();cx.restore();
 
-    cx.save();cx.shadowColor=n.color;cx.shadowBlur=isP?20:10;
-    cx.fillStyle=isP?n.color:h>60?'#ff345d':G.allies.includes(k)?'#00ff9d':'#666';
+    // Attack mode targeting ring
+    if(G.attackMode&&!isP&&!G.allies.includes(k)){
+      cx.save();cx.strokeStyle=mouseNear?'#a855f7':'#a855f733';
+      cx.lineWidth=mouseNear?3:1;cx.setLineDash(mouseNear?[]:[4,4]);
+      cx.beginPath();cx.arc(px,py,35+Math.sin(Date.now()*.005)*5,0,7);cx.stroke();
+      cx.setLineDash([]);cx.restore();
+    }
+
+    cx.save();cx.shadowColor=isAttackTarget?'#a855f7':n.color;cx.shadowBlur=isAttackTarget?25:isP?20:10;
+    cx.fillStyle=isAttackTarget?'#a855f7':isP?n.color:h>60?'#ff345d':G.allies.includes(k)?'#00ff9d':'#666';
     cx.beginPath();cx.arc(px,py,isP?10:7,0,7);cx.fill();cx.restore();
 
     cx.textAlign='center';cx.font=isP?'bold 13px Arial':'11px Arial';
@@ -847,7 +858,8 @@ function drawHUD(){
     <div>Mil <b style="color:#ef4444">${Math.floor(G.mil)}</b> · Def <b style="color:#22c55e">${Math.floor(G.defense)}</b> · Off <b style="color:#a855f7">${G.offense}</b></div>
     <div>Tech <b style="color:#3b82f6">${Math.floor(G.tech)}</b></div><hr>
     <div>Runde <b>${G.turn}</b> · Nächste in <b style="color:#00d9ff">${nt}s</b></div>
-    <div style="font-size:10px;color:#888">Deine Gebäude: ${G.buildings.length} | KI Gebäude: ${aiBldCount}</div>`;
+    <div style="font-size:10px;color:#888">Deine Gebäude: ${G.buildings.length} | KI Gebäude: ${aiBldCount}</div>
+    ${G.attackMode?'<div style="font-size:12px;font-weight:900;color:#a855f7;animation:pulse 1s infinite">🎯 ANGRIFFSMODUS – Klicke auf Feind!</div>':''}`;
 }
 
 function drawIntel(){
@@ -888,8 +900,10 @@ window.openDiplomacy=function(){
   if(neutral.length>0){const t=neutral[Math.floor(Math.random()*neutral.length)];G.hostility[t]=Math.max(0,G.hostility[t]-15);addLog(`🤝 ${NATIONS[t].flag} Beziehungen verbessert!`,'g');playBuild()}
 };
 window.doCounter=function(){
-  let maxH=0,target=null;for(const k of G.enemyNations){if(G.hostility[k]>maxH){maxH=G.hostility[k];target=k}}
-  if(target)counterAttack(target);else addLog('Keine Feinde!','c');
+  if(G.offense<=0){addLog('Kein Raketensilo! Baue erst Silos!','r');playAlert();return}
+  if(G.attackMode){G.attackMode=false;addLog('Angriff abgebrochen','c');return}
+  G.attackMode=true;
+  addLog('🎯 Klicke auf eine Nation zum Angreifen! (K=Abbruch)','p');playAlert();
 };
 
 // ====== GAME OVER ======
@@ -919,14 +933,28 @@ cv.addEventListener('click',e=>{
     keys.forEach((k,i)=>{const x=startX+i*(cardW+gap);if(e.clientX>x&&e.clientX<x+cardW&&e.clientY>startY&&e.clientY<startY+cardH)selectNation(k)});
     return;
   }
-  if(G.mode==='playing'&&canBuild(G.selected,e.clientX,e.clientY))build(G.selected,e.clientX,e.clientY);
+  if(G.mode==='playing'){
+    // Check if attack mode - click on enemy nation
+    if(G.attackMode){
+      for(const k of G.enemyNations){
+        const pos=MAP_POS[k];const px=pos.x*W,py=pos.y*H;
+        if(Math.hypot(e.clientX-px,e.clientY-py)<40){
+          if(G.allies.includes(k)){addLog(`${NATIONS[k].flag} Verbündete kannst du nicht angreifen!`,'y');G.attackMode=false;return}
+          G.attackMode=false;counterAttack(k);return;
+        }
+      }
+      addLog('Klicke auf einen Feind! (K=Abbruch)','y');return;
+    }
+    // Normal building
+    if(canBuild(G.selected,e.clientX,e.clientY))build(G.selected,e.clientX,e.clientY);
+  }
 });
 addEventListener('keydown',e=>{
   initAudio();
   if(e.key==='r'||e.key==='R'){
     G={mode:'menu',nation:null,lastT:0,selected:'factory',mouseX:0,mouseY:0,shake:0,flash:0,flashColor:'',
       money:0,income:0,mil:0,tech:0,defense:0,offense:0,buildings:[],
-      ai:{},hostility:{},allies:[],enemyNations:[],
+      ai:{},hostility:{},allies:[],enemyNations:[],attackMode:false,
       turn:0,turnTimer:0,turnLength:12,
       particles:[],texts:[],threats:[],attackScene:null,sceneTimer:0,log:[],
       aiBuildAnims:[],aiMissiles:[],aiExplosions:[]};return}
@@ -934,7 +962,7 @@ addEventListener('keydown',e=>{
   if(e.key==='1')G.selected='factory';if(e.key==='2')G.selected='milbase';if(e.key==='3')G.selected='lab';
   if(e.key==='4')G.selected='defense';if(e.key==='5')G.selected='silo';
   if(e.key==='d'||e.key==='D')window.openDiplomacy();
-  if(e.key==='k'||e.key==='K')window.doCounter();
+  if(e.key==='k'||e.key==='K'){window.doCounter();return}
   playAlert();
 });
 
