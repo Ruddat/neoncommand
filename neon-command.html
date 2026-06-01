@@ -445,11 +445,14 @@ function drawWorldMap(){
     }else if(G.selected){cx.save();cx.globalAlpha=.25;cx.fillStyle='#ff345d';cx.beginPath();cx.arc(G.mouseX,G.mouseY,12,0,7);cx.fill();cx.restore()}
   }
 
-  // Draw AI vs AI missiles
+  // Draw AI vs AI missiles + player counter missiles
   for(const m of G.aiMissiles){
-    cx.save();cx.shadowColor=m.color;cx.shadowBlur=10;cx.fillStyle=m.color;
+    cx.save();cx.shadowColor=m.color||'#ff345d';cx.shadowBlur=15;cx.fillStyle=m.color||'#ff345d';
     const angle=Math.atan2(m.vy,m.vx);cx.translate(m.x,m.y);cx.rotate(angle);
-    cx.fillRect(-8,-2,16,4);cx.fillStyle='#ffb000';cx.fillRect(8,-1,4,2);cx.restore();
+    cx.fillRect(-12,-3,24,6);cx.fillStyle='#ffb000';cx.fillRect(12,-2,6,4);cx.restore();
+    // Trail
+    cx.save();cx.strokeStyle=(m.color||'#ff345d')+'66';cx.lineWidth=2;cx.beginPath();
+    cx.moveTo(m.x,m.y);cx.lineTo(m.x-m.vx*.08,m.y-m.vy*.08);cx.stroke();cx.restore();
   }
   for(const e of G.aiExplosions){
     const a=e.life/e.max;cx.save();
@@ -604,24 +607,76 @@ function resolveAttack(fromKey,strength){
   if(G.offense>0&&damage>0){
     const counter=Math.floor(G.offense*.8);
     G.hostility[fromKey]=Math.max(0,G.hostility[fromKey]-counter*.3);
-    if(ai&&ai.buildings.length>0){
-      const idx=Math.floor(Math.random()*ai.buildings.length);const b=ai.buildings[idx];
-      burst(b.x,b.y,'#a855f7',20,1.5);floatText(b.x,b.y-25,'ZERSTÖRT!','#a855f7');
-      addLog(`🚀 Gegenangriff zerstört ${n.flag} ${BLDS[b.type].label}!`,'p');ai.buildings.splice(idx,1);
+    // Auto-counter missiles from player to attacker
+    const pFrom=MAP_POS[G.nation],aTo=MAP_POS[fromKey];
+    const pfx=pFrom.x*W,pfy=pFrom.y*H,atx=aTo.x*W,aty=aTo.y*H;
+    const cAngle=Math.atan2(aty-pfy,atx-pfx),cSpeed=220;
+    const cCount=Math.min(4,Math.floor(G.offense/20)+1);
+    for(let i=0;i<cCount;i++){
+      setTimeout(()=>{
+        const m={x:pfx+rnd(-10,10),y:pfy+rnd(-10,10),vx:Math.cos(cAngle)*cSpeed+rnd(-10,10),vy:Math.sin(cAngle)*cSpeed+rnd(-10,10),color:'#a855f7',life:2.5,max:2.5};
+        G.aiMissiles.push(m);
+      },i*200);
     }
-    addLog(`🚀 Gegenangriff auf ${n.flag} ${n.name}!`,'p');playBoom(.3);
+    const cTravelTime=Math.hypot(atx-pfx,aty-pfy)/cSpeed;
+    setTimeout(()=>{
+      if(ai&&ai.buildings.length>0){
+        const idx=Math.floor(Math.random()*ai.buildings.length);const b=ai.buildings[idx];
+        burst(b.x,b.y,'#a855f7',20,1.5);floatText(b.x,b.y-25,'ZERSTÖRT!','#a855f7');
+        G.aiExplosions.push({x:b.x,y:b.y,life:1,max:1,size:rnd(25,50)});
+        addLog(`🚀 Gegenangriff zerstört ${n.flag} ${BLDS[b.type].label}!`,'p');ai.buildings.splice(idx,1);
+        if(b.type==='milbase')ai.mil=Math.max(0,ai.mil-3*b.level);
+        if(b.type==='defense')ai.defense=Math.max(0,ai.defense-5*b.level);
+        if(b.type==='silo')ai.offense=Math.max(0,ai.offense-15*b.level);
+      }
+      addLog(`🚀 Gegenangriff auf ${n.flag} ${n.name}!`,'p');playBoom(.3);
+    },(cTravelTime+0.5)*1000);
   }
 }
 
 function counterAttack(targetKey){
-  if(G.offense<=0){addLog('Kein Raketensilo!','r');return}
+  if(G.offense<=0){addLog('Kein Raketensilo! Baue erst Raketensilos!','r');playAlert();return}
   const n=NATIONS[targetKey];const ai=G.ai[targetKey];
+  const pN=NATIONS[G.nation];
   G.hostility[targetKey]=Math.max(0,G.hostility[targetKey]-15);
   const from=MAP_POS[G.nation],to=MAP_POS[targetKey];
-  burst(from.x*W,from.y*H,'#a855f7',25,1.5);burst(to.x*W,to.y*H,'#ff345d',30,1.5);
-  G.shake=10;G.flash=.6;G.flashColor='#a855f7';playBoom(.5);
-  if(ai&&ai.buildings.length>0){const idx=Math.floor(Math.random()*ai.buildings.length);const b=ai.buildings[idx];burst(b.x,b.y,'#ff345d',20,1.5);floatText(b.x,b.y-25,'BOOM!','#ff345d');addLog(`🚀 ${BLDS[b.type].label} von ${n.flag} zerstört!`,'p');ai.buildings.splice(idx,1)}
-  addLog(`🚀 Gegenangriff auf ${n.flag} ${n.name}!`,'p');
+  const fx=from.x*W,fy=from.y*H,tx=to.x*W,ty=to.y*H;
+  const angle=Math.atan2(ty-fy,tx-fx),speed=250;
+
+  // Launch player missiles!
+  const count=Math.min(6,Math.floor(G.offense/15)+1);
+  const missiles=[];
+  for(let i=0;i<count;i++){missiles.push({x:fx+rnd(-15,15),y:fy+rnd(-15,15),vx:Math.cos(angle)*speed+rnd(-15,15),vy:Math.sin(angle)*speed+rnd(-15,15)})}
+  G.attackScene={missiles,explosions:[]};G.sceneTimer=4;
+  G.shake=8;G.flash=.6;G.flashColor='#a855f7';
+  addLog(`🚀 ${pN.flag} greift ${n.flag} ${n.name} an! ${count} Raketen!`,'p');
+  playSiren();
+
+  const timeToTarget=Math.hypot(tx-fx,ty-fy)/speed;
+  // Explosions at target
+  for(let i=0;i<count;i++){setTimeout(()=>{
+    if(G.attackScene){
+      const ex=tx+rnd(-50,50),ey=ty+rnd(-50,50);
+      G.attackScene.explosions.push({x:ex,y:ey,life:1,max:1,size:rnd(25,60)});
+      burst(ex,ey,'#a855f7',15,1.5);burst(ex,ey,'#ffb000',10);playBoom(.4);
+      G.shake=Math.max(G.shake,10);G.flash=.7;G.flashColor='#a855f7';
+    }
+  },(timeToTarget+i*.25)*1000)}
+
+  // Resolve after missiles hit
+  setTimeout(()=>{
+    if(ai&&ai.buildings.length>0){
+      const idx=Math.floor(Math.random()*ai.buildings.length);const b=ai.buildings[idx];
+      burst(b.x,b.y,'#ff345d',20,1.5);floatText(b.x,b.y-25,'BOOM!','#ff345d');
+      addLog(`💥 ${BLDS[b.type].label} von ${n.flag} zerstört!`,'p');ai.buildings.splice(idx,1);
+      // Recalculate AI stats
+      if(b.type==='milbase')ai.mil=Math.max(0,ai.mil-3*b.level);
+      if(b.type==='defense')ai.defense=Math.max(0,ai.defense-5*b.level);
+      if(b.type==='silo')ai.offense=Math.max(0,ai.offense-15*b.level);
+    }
+    addLog(`🚀 Angriff auf ${n.flag} ${n.name} abgeschlossen!`,'p');
+    playBoom(.5);
+  },(timeToTarget+count*.25+.5)*1000);
 }
 
 // ====== AI vs AI COMBAT (visual!) ======
@@ -812,7 +867,7 @@ function drawBuildBar(){
     html+=`<div class="bb${active?' active':''}" style="opacity:${aff?1:.4}" onclick="selectBuild('${k}')"><div class="k">${s.key}</div><div class="n" style="color:${s.color}">${s.label}</div><div class="c">${s.cost}$</div></div>`;
   }
   html+=`<div class="bb" onclick="openDiplomacy()" style="border-color:#ff2bd6"><div class="k" style="color:#ff2bd6">D</div><div class="n" style="color:#ff2bd6">Diplomatie</div><div class="c">20$</div></div>`;
-  html+=`<div class="bb" onclick="doCounter()" style="border-color:#a855f7"><div class="k" style="color:#a855f7">K</div><div class="n" style="color:#a855f7">Angriff</div><div class="c">Raketen</div></div>`;
+  html+=`<div class="bb" onclick="doCounter()" style="border-color:#a855f7;opacity:${G.offense>0?1:.4}"><div class="k" style="color:#a855f7">K</div><div class="n" style="color:#a855f7">Angriff</div><div class="c">${G.offense>0?Math.floor(G.offense/15)+' Raketen':'Baue Silo!'}</div></div>`;
   el.innerHTML=html;
 }
 
