@@ -36,6 +36,7 @@ export class Game {
       energy: 180,
       income: 7,
       data: 0,
+      score: 0,
       core: { x: snap(window.innerWidth * 0.32), y: snap(window.innerHeight * 0.5), hp: 100, maxHp: 100 },
       buildings: [],
       enemies: [],
@@ -44,10 +45,12 @@ export class Game {
       wave: 0,
       waveTimer: 2,
       waveBudget: 0,
+      isBossWave: false,
       kills: 0,
       paused: false,
       mouse: { x: 0, y: 0, gridX: 0, gridY: 0 },
       message: 'Press Enter to start command uplink',
+      msgTimer: 0,
     };
   }
 
@@ -65,7 +68,8 @@ export class Game {
   startGame() {
     this.state = this.createState();
     this.state.mode = 'playing';
-    this.state.message = 'Build generators and turrets. Hold the line.';
+    this.state.message = 'Baue Generatoren und Türme. Halte die Linie!';
+    this.state.msgTimer = 4;
     spawnWave(this.state);
   }
 
@@ -84,8 +88,11 @@ export class Game {
     if (!this.canBuild(type, x, y)) return;
     const spec = BUILDINGS[type];
     this.state.energy -= spec.cost;
-    this.state.buildings.push({ type, x, y, cooldown: 0, hp: type === 'generator' ? 65 : 90 });
+    const hp = spec.hp || (type === 'generator' ? 65 : 90);
+    this.state.buildings.push({ type, x, y, cooldown: 0, hp });
     burst(this.state, x, y, spec.color, 20);
+    this.state.message = `${spec.label} gebaut! (-${spec.cost}E)`;
+    this.state.msgTimer = 1.5;
   }
 
   onMouseMove(event) {
@@ -108,14 +115,27 @@ export class Game {
   onKeyDown(event) {
     if (event.key === 'Enter' && this.state.mode === 'menu') this.startGame();
     if (event.key === 'r' || event.key === 'R') this.resetGame();
-    if (event.code === 'Space') this.state.paused = !this.state.paused;
+    if (event.code === 'Space') {
+      event.preventDefault();
+      this.state.paused = !this.state.paused;
+    }
+
+    // Building selection keys
     if (event.key === '1') this.state.selected = 'laser';
     if (event.key === '2') this.state.selected = 'missile';
     if (event.key === '3') this.state.selected = 'generator';
+    if (event.key === '4') this.state.selected = 'shield';
+    if (event.key === '5') this.state.selected = 'sniper';
   }
 
   update(dt) {
+    // Always update message timer
+    if (this.state.msgTimer > 0) {
+      this.state.msgTimer -= dt;
+    }
+
     if (this.state.mode !== 'playing' || this.state.paused) return;
+
     updateResources(this.state, dt);
     updateWaves(this.state, this.width, this.height, dt);
     updateCombat(this.state, dt);
@@ -124,7 +144,8 @@ export class Game {
     if (this.state.core.hp <= 0) {
       this.state.core.hp = 0;
       this.state.mode = 'gameover';
-      this.state.message = 'Command core destroyed';
+      this.state.message = 'Core zerstört';
+      burst(this.state, this.state.core.x, this.state.core.y, '#ff345d', 60);
     }
   }
 

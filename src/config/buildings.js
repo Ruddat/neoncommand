@@ -7,7 +7,7 @@ export const BUILDINGS = {
     fireRate: 0.22,
     damage: 14,
     color: '#ff2bd6',
-    description: 'Fast single-target defense.'
+    description: 'Schnelle Einzelfeuer-Verteidigung.',
   },
   missile: {
     label: 'Missile Turret',
@@ -17,7 +17,7 @@ export const BUILDINGS = {
     fireRate: 0.08,
     damage: 42,
     color: '#ffb000',
-    description: 'Slow splash-damage launcher.'
+    description: 'Langsamer Raketenwerfer mit Flächenschaden.',
   },
   generator: {
     label: 'Generator',
@@ -27,6 +27,28 @@ export const BUILDINGS = {
     fireRate: 0,
     damage: 0,
     color: '#00ff9d',
-    description: 'Increases energy and data income.'
+    description: 'Erhöht Energie- und Data-Einkommen.',
+  },
+  shield: {
+    label: 'Schild',
+    key: '4',
+    cost: 90,
+    range: 0,
+    fireRate: 0,
+    damage: 0,
+    color: '#7d5cff',
+    description: 'Schützt den Kern und heilt ihn langsam.',
+    hp: 200,
+    healRate: 6,
+  },
+  sniper: {
+    label: 'Sniper Turret',
+    key: '5',
+    cost: 100,
+    range: 420,
+    fireRate: 0.04,
+    damage: 85,
+    color: '#00d9ff',
+    description: 'Extrem Reichweite, langsamer Schuss, hoher Schaden.',
   },
 };
