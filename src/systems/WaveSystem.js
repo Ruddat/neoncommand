@@ -1,160 +1,86 @@
 import { burst } from './ParticleSystem.js';
 
-/**
- * WaveSystem – spawns increasingly difficult enemy waves.
- *
- * Wave structure:
- *   - Budget = base + wave * scaling
- *   - Enemies spawn one-by-one with a short delay
- *   - Every 5th wave is a boss wave
- *   - After budget is spent and all enemies dead → next wave after a pause
- */
-
 const ENEMY_TYPES = {
-  scout: {
-    hp: 42,
-    speed: 68,
-    size: 10,
-    reward: 6,
-    color: '#ff345d',
-    energyReward: 3,
-  },
-  soldier: {
-    hp: 80,
-    speed: 48,
-    size: 14,
-    reward: 10,
-    color: '#ff6b35',
-    energyReward: 5,
-  },
-  tank: {
-    hp: 200,
-    speed: 28,
-    size: 20,
-    reward: 22,
-    color: '#ffb000',
-    energyReward: 10,
-  },
-  runner: {
-    hp: 35,
-    speed: 130,
-    size: 9,
-    reward: 8,
-    color: '#00ff9d',
-    energyReward: 4,
-  },
-  boss: {
-    hp: 1200,
-    speed: 22,
-    size: 36,
-    reward: 200,
-    color: '#ff2bd6',
-    energyReward: 50,
-    isBoss: true,
-  },
+  scout: { hp: 35, speed: 62, size: 9, reward: 8, color: '#ff345d', energy: 4 },
+  soldier: { hp: 65, speed: 44, size: 13, reward: 12, color: '#ff6b35', energy: 6 },
+  tank: { hp: 160, speed: 24, size: 19, reward: 25, color: '#ffb000', energy: 12 },
+  runner: { hp: 28, speed: 110, size: 8, reward: 10, color: '#00ff9d', energy: 5 },
+  boss: { hp: 800, speed: 18, size: 34, reward: 250, color: '#ff2bd6', energy: 60, isBoss: true },
 };
 
 export function spawnWave(state) {
   state.wave += 1;
-  const isBossWave = state.wave % 5 === 0;
-
-  if (isBossWave) {
-    state.waveBudget = 3 + Math.floor(state.wave / 5);
-  } else {
-    state.waveBudget = 6 + state.wave * 3;
-  }
-
+  const isBoss = state.wave % 5 === 0;
+  state.isBossWave = isBoss;
+  state.waveBudget = isBoss ? 2 + Math.floor(state.wave / 5) : 5 + state.wave * 2;
   state.waveTimer = 0;
-  state.isBossWave = isBossWave;
 
-  // Message
-  if (isBossWave) {
+  if (isBoss) {
     state.message = `BOSS WELLE ${state.wave}!`;
-    burst(state, state.core.x, state.core.y, '#ff2bd6', 30);
+    burst(state, state.core.x, state.core.y, '#ff2bd6', 40, 1.5);
+    state.shake = 12;
   } else {
     state.message = `Welle ${state.wave}`;
+    if (state.wave <= 2) state.message += ' – Baue Verteidigung!';
   }
+  state.msgTimer = 3;
 }
 
 export function updateWaves(state, width, height, dt) {
   state.waveTimer += dt;
 
-  // Spawn enemies from budget
   if (state.waveBudget > 0) {
-    const spawnDelay = Math.max(0.15, 0.7 - state.wave * 0.02);
-    if (state.waveTimer > spawnDelay) {
+    const delay = Math.max(0.25, 1.0 - state.wave * 0.02);
+    if (state.waveTimer > delay) {
       spawnOneEnemy(state, width, height);
       state.waveBudget--;
       state.waveTimer = 0;
     }
   }
 
-  // When budget is spent and all enemies dead → next wave
-  if (state.waveBudget === 0 && state.enemies.length === 0 && state.waveTimer > 3.5) {
+  if (state.waveBudget === 0 && state.enemies.length === 0 && state.waveTimer > 3) {
     spawnWave(state);
   }
 }
 
 function spawnOneEnemy(state, width, height) {
-  const isBossWave = state.isBossWave;
-
-  // Boss wave: first enemy is boss
-  if (isBossWave && state.waveBudget === 3 + Math.floor(state.wave / 5)) {
-    spawnSpecificEnemy(state, width, height, 'boss');
+  if (state.isBossWave && state.waveBudget === 2 + Math.floor(state.wave / 5)) {
+    spawnSpecific(state, width, height, 'boss');
     return;
   }
 
-  // Pick enemy type based on wave number
-  const wave = state.wave;
-  const roll = Math.random();
-
+  const w = state.wave;
+  const r = Math.random();
   let type;
-  if (wave < 3) {
-    type = 'scout';
-  } else if (wave < 6) {
-    type = roll < 0.5 ? 'scout' : roll < 0.85 ? 'soldier' : 'runner';
-  } else if (wave < 10) {
-    type = roll < 0.25 ? 'scout' : roll < 0.55 ? 'soldier' : roll < 0.75 ? 'runner' : 'tank';
-  } else {
-    type = roll < 0.15 ? 'scout' : roll < 0.40 ? 'soldier' : roll < 0.60 ? 'runner' : roll < 0.85 ? 'tank' : 'runner';
-  }
 
-  spawnSpecificEnemy(state, width, height, type);
+  if (w <= 2) type = 'scout';
+  else if (w <= 4) type = r < 0.55 ? 'scout' : r < 0.85 ? 'soldier' : 'runner';
+  else if (w <= 8) type = r < 0.3 ? 'scout' : r < 0.6 ? 'soldier' : r < 0.8 ? 'runner' : 'tank';
+  else type = r < 0.15 ? 'scout' : r < 0.4 ? 'soldier' : r < 0.6 ? 'runner' : r < 0.85 ? 'tank' : 'runner';
+
+  spawnSpecific(state, width, height, type);
 }
 
-function spawnSpecificEnemy(state, width, height, typeName) {
+function spawnSpecific(state, width, height, typeName) {
   const spec = ENEMY_TYPES[typeName];
   if (!spec) return;
 
-  // Spawn from right side or top/bottom edge
   const side = Math.random();
   let x, y;
+  if (side < 0.55) { x = width + 30; y = Math.random() * height; }
+  else if (side < 0.78) { x = Math.random() * width; y = -30; }
+  else { x = Math.random() * width; y = height + 30; }
 
-  if (side < 0.6) {
-    // Right side
-    x = width + 40;
-    y = Math.random() * height;
-  } else if (side < 0.8) {
-    // Top
-    x = Math.random() * width;
-    y = -40;
-  } else {
-    // Bottom
-    x = Math.random() * width;
-    y = height + 40;
-  }
-
-  const waveScale = 1 + (state.wave - 1) * 0.08;
-
+  const scale = 1 + (state.wave - 1) * 0.06;
   state.enemies.push({
-    x,
-    y,
-    hp: spec.hp * waveScale,
-    maxHp: spec.hp * waveScale,
+    x, y,
+    hp: spec.hp * scale,
+    maxHp: spec.hp * scale,
     speed: spec.speed,
     size: spec.size,
     reward: spec.reward,
     color: spec.color,
+    energy: spec.energy,
     isBoss: spec.isBoss || false,
   });
 }

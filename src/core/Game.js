@@ -1,10 +1,10 @@
-import { BUILDINGS } from '../config/buildings.js';
+import { BUILDINGS, UPGRADES } from '../config/buildings.js';
 import { TILE, snap, VERSION } from './constants.js';
 import { Renderer } from './Renderer.js';
 import { Hud } from '../ui/Hud.js';
 import { updateResources } from '../systems/ResourceSystem.js';
 import { updateWaves, spawnWave } from '../systems/WaveSystem.js';
-import { updateCombat } from '../systems/CombatSystem.js';
+import { updateCombat, orbitalStrike } from '../systems/CombatSystem.js';
 import { updateParticles, burst } from '../systems/ParticleSystem.js';
 
 export class Game {
@@ -33,15 +33,16 @@ export class Game {
       version: VERSION,
       mode: 'menu',
       selected: 'laser',
-      energy: 180,
-      income: 7,
+      energy: 250,
+      income: 8,
       data: 0,
       score: 0,
-      core: { x: snap(window.innerWidth * 0.32), y: snap(window.innerHeight * 0.5), hp: 100, maxHp: 100 },
+      core: { x: snap(window.innerWidth * 0.32), y: snap(window.innerHeight * 0.5), hp: 200, maxHp: 200 },
       buildings: [],
       enemies: [],
       projectiles: [],
       particles: [],
+      texts: [],
       wave: 0,
       waveTimer: 2,
       waveBudget: 0,
@@ -49,8 +50,24 @@ export class Game {
       kills: 0,
       paused: false,
       mouse: { x: 0, y: 0, gridX: 0, gridY: 0 },
-      message: 'Press Enter to start command uplink',
+      message: '',
       msgTimer: 0,
+      // Upgrades
+      upgDmg: 1,
+      upgRate: 1,
+      upgRange: 1,
+      upgIncome: 1,
+      upgGen: 0,
+      // Combat
+      killStreak: 0,
+      killTimer: 0,
+      bestStreak: 0,
+      // Orbital
+      orbitalCd: 0,
+      // Upgrade screen
+      upgChoices: [],
+      // Effects
+      shake: 0,
     };
   }
 
@@ -68,31 +85,40 @@ export class Game {
   startGame() {
     this.state = this.createState();
     this.state.mode = 'playing';
-    this.state.message = 'Baue Generatoren und Türme. Halte die Linie!';
-    this.state.msgTimer = 4;
+    this.state.message = 'Baue Generatoren für Einkommen, dann Laser!';
+    this.state.msgTimer = 5;
     spawnWave(this.state);
-  }
-
-  resetGame() {
-    this.startGame();
   }
 
   canBuild(type, x, y) {
     const spec = BUILDINGS[type];
     if (!spec || this.state.energy < spec.cost) return false;
-    if (Math.hypot(x - this.state.core.x, y - this.state.core.y) < TILE * 1.4) return false;
-    return !this.state.buildings.some((building) => building.x === x && building.y === y);
+    if (Math.hypot(x - this.state.core.x, y - this.state.core.y) < TILE * 1.5) return false;
+    return !this.state.buildings.some((b) => b.x === x && b.y === y);
   }
 
   build(type, x, y) {
     if (!this.canBuild(type, x, y)) return;
     const spec = BUILDINGS[type];
     this.state.energy -= spec.cost;
-    const hp = spec.hp || (type === 'generator' ? 65 : 90);
+    const hp = spec.hp || (type === 'generator' ? 80 : type === 'shield' ? 220 : 100);
     this.state.buildings.push({ type, x, y, cooldown: 0, hp });
-    burst(this.state, x, y, spec.color, 20);
-    this.state.message = `${spec.label} gebaut! (-${spec.cost}E)`;
-    this.state.msgTimer = 1.5;
+    burst(this.state, x, y, spec.color, 22);
+  }
+
+  openUpgrades() {
+    if (this.state.data < 20) return;
+    this.state.mode = 'upgrading';
+    this.state.upgChoices = [...UPGRADES].sort(() => Math.random() - 0.5).slice(0, 4);
+  }
+
+  buyUpgrade(i) {
+    const u = this.state.upgChoices[i];
+    if (!u || this.state.data < u.cost) return;
+    this.state.data -= u.cost;
+    u.apply(this.state);
+    this.state.mode = 'playing';
+    this.state.upgChoices = [];
   }
 
   onMouseMove(event) {
@@ -113,26 +139,45 @@ export class Game {
   }
 
   onKeyDown(event) {
-    if (event.key === 'Enter' && this.state.mode === 'menu') this.startGame();
-    if (event.key === 'r' || event.key === 'R') this.resetGame();
+    const s = this.state;
+
+    if (event.key === 'Enter' && s.mode === 'menu') this.startGame();
+    if (event.key === 'r' || event.key === 'R') this.startGame();
+
     if (event.code === 'Space') {
       event.preventDefault();
-      this.state.paused = !this.state.paused;
+      if (s.mode === 'playing') s.paused = !s.paused;
+      else if (s.mode === 'upgrading') { s.mode = 'playing'; s.upgChoices = []; }
     }
 
-    // Building selection keys
-    if (event.key === '1') this.state.selected = 'laser';
-    if (event.key === '2') this.state.selected = 'missile';
-    if (event.key === '3') this.state.selected = 'generator';
-    if (event.key === '4') this.state.selected = 'shield';
-    if (event.key === '5') this.state.selected = 'sniper';
+    if (event.key === 'Escape' && s.mode === 'upgrading') {
+      s.mode = 'playing'; s.upgChoices = [];
+    }
+
+    // Upgrade screen
+    if (s.mode === 'upgrading') {
+      if (event.key >= '1' && event.key <= '6') this.buyUpgrade(+event.key - 1);
+      return;
+    }
+
+    // Building selection
+    if (event.key === '1') s.selected = 'laser';
+    if (event.key === '2') s.selected = 'missile';
+    if (event.key === '3') s.selected = 'generator';
+    if (event.key === '4') s.selected = 'shield';
+    if (event.key === '5') s.selected = 'sniper';
+
+    // Orbital strike
+    if (event.key === 'q' || event.key === 'Q') orbitalStrike(s);
+
+    // Upgrades
+    if (event.key === 'u' || event.key === 'U') this.openUpgrades();
   }
 
   update(dt) {
-    // Always update message timer
-    if (this.state.msgTimer > 0) {
-      this.state.msgTimer -= dt;
-    }
+    if (this.state.msgTimer > 0) this.state.msgTimer -= dt;
+    if (this.state.orbitalCd > 0) this.state.orbitalCd -= dt;
+    this.state.shake = Math.max(0, this.state.shake - 30 * dt);
 
     if (this.state.mode !== 'playing' || this.state.paused) return;
 
@@ -141,17 +186,23 @@ export class Game {
     updateCombat(this.state, dt);
     updateParticles(this.state, dt);
 
+    if (this.state.killStreak > (this.state.bestStreak || 0)) this.state.bestStreak = this.state.killStreak;
+
     if (this.state.core.hp <= 0) {
       this.state.core.hp = 0;
       this.state.mode = 'gameover';
-      this.state.message = 'Core zerstört';
-      burst(this.state, this.state.core.x, this.state.core.y, '#ff345d', 60);
+      burst(this.state, this.state.core.x, this.state.core.y, '#ff345d', 80, 2);
+      this.state.shake = 25;
     }
   }
 
   draw() {
-    this.renderer.draw(this.state, this.width, this.height, (type, x, y) => this.canBuild(type, x, y));
-    this.hud.render(this.state, BUILDINGS);
+    const s = this.state;
+    this.ctx.save();
+    if (s.shake > 0) this.ctx.translate((Math.random() - 0.5) * s.shake, (Math.random() - 0.5) * s.shake);
+    this.renderer.draw(s, this.width, this.height, (type, x, y) => this.canBuild(type, x, y));
+    this.ctx.restore();
+    this.hud.render(s, BUILDINGS);
   }
 
   frame(time = 0) {
