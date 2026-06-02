@@ -68,7 +68,7 @@ const ALLY_MAP={usa:['eu','ukraine'],eu:['usa','ukraine'],russia:['china'],china
 // ====== GAME STATE ======
 let G={mode:'menu',nation:null,lastT:0,selected:'factory',mouseX:0,mouseY:0,shake:0,flash:0,flashColor:'',
   money:0,income:0,mil:0,tech:0,defense:0,offense:0,buildings:[],
-  ai:{},hostility:{},allies:[],enemyNations:[],attackMode:false,
+  ai:{},hostility:{},allies:[],enemyNations:[],attackMode:false,diplomacyMode:false,
   turn:0,turnTimer:0,turnLength:12,
   particles:[],texts:[],threats:[],attackScene:null,sceneTimer:0,log:[],
   aiBuildAnims:[],aiMissiles:[],aiExplosions:[],
@@ -484,6 +484,13 @@ function drawWorldMap(){
       cx.beginPath();cx.arc(px,py,35+Math.sin(Date.now()*.005)*5,0,7);cx.stroke();
       cx.setLineDash([]);cx.restore();
     }
+    // Diplomacy mode targeting ring (green)
+    if(G.diplomacyMode&&!isP){
+      cx.save();cx.strokeStyle=mouseNear?'#00ff9d':'#00ff9d33';
+      cx.lineWidth=mouseNear?3:1;cx.setLineDash(mouseNear?[]:[4,4]);
+      cx.beginPath();cx.arc(px,py,35+Math.sin(Date.now()*.004)*4,0,7);cx.stroke();
+      cx.setLineDash([]);cx.restore();
+    }
 
     cx.save();cx.shadowColor=isAttackTarget?'#a855f7':n.color;cx.shadowBlur=isAttackTarget?25:isP?20:10;
     cx.fillStyle=isAttackTarget?'#a855f7':isP?n.color:h>60?'#ff345d':G.allies.includes(k)?'#00ff9d':'#666';
@@ -697,6 +704,12 @@ function counterAttack(targetKey){
     }
     addLog(`🚀 Angriff auf ${n.flag} ${n.name} abgeschlossen!`,'p');
     playBoom(.5);
+    // Attacking makes target AND their allies angry!
+    G.hostility[targetKey]+=20;
+    const theirAllies=ALLY_MAP[targetKey]||[];
+    theirAllies.forEach(ally=>{
+      if(ally!==G.nation){G.hostility[ally]+=10;addLog(`😡 ${NATIONS[ally].flag} ist wütend über deinen Angriff! (+10)`,'y')}
+    });
   },(timeToTarget+count*.25+.5)*1000);
 }
 
@@ -771,12 +784,31 @@ function updateGame(dt){
   // AI updates
   for(const k of G.enemyNations){updateAI(k,dt)}
 
-  // Hostility
+  // Hostility – DYNAMIC!
   for(const k of G.enemyNations){
-    const baseInc=G.allies.includes(k)?.3:.8;
+    const isAlly=G.allies.includes(k);
+    const baseInc=isAlly?.2:.8;
     G.hostility[k]=Math.min(100,G.hostility[k]+baseInc*dt);
   }
-  G.allies.forEach(a=>{G.hostility[a]=Math.max(0,G.hostility[a]-1*dt)});
+  G.allies.forEach(a=>{G.hostility[a]=Math.max(0,G.hostility[a]-1.5*dt)});
+
+  // ALLY BETRAYAL – if hostility with ally goes too high, they turn enemy!
+  for(let i=G.allies.length-1;i>=0;i--){
+    const a=G.allies[i];
+    if(G.hostility[a]>75){
+      G.allies.splice(i,1);
+      addLog(`💔 ${NATIONS[a].flag} ${NATIONS[a].name} bricht das Bündnis!`,'r');
+      playSiren();G.shake=5;G.flash=.5;G.flashColor='#ff345d';
+    }
+  }
+  // MAKE PEACE – if hostility with enemy drops low enough, they become ally!
+  for(const k of [...G.enemyNations]){
+    if(!G.allies.includes(k)&&G.hostility[k]<8){
+      G.allies.push(k);
+      addLog(`🤝 ${NATIONS[k].flag} ${NATIONS[k].name} ist jetzt VERBÜNDET!`,'g');
+      playBuild();G.flash=.3;G.flashColor='#00ff9d';
+    }
+  }
 
   // Turn system
   if(G.turnTimer>=G.turnLength){G.turnTimer=0;G.turn++;processTurn()}
@@ -812,11 +844,58 @@ function updateGame(dt){
 
 function processTurn(){
   addLog(`── Runde ${G.turn} ──`,'c');
-  // Random events - trade with allies
-  if(Math.random()<.15){const ally=G.allies[Math.floor(Math.random()*G.allies.length)];if(ally){const b=Math.floor(50+G.tech*2);G.money+=b;addLog(`${NATIONS[ally].flag} Handel: +${b}$`,'g')}}
 
-  // AI attacks on player
+  // ====== DIPLOMATIC EVENTS ======
+  // Trade with allies
+  if(G.allies.length>0&&Math.random()<.2){const ally=G.allies[Math.floor(Math.random()*G.allies.length)];const b=Math.floor(50+G.tech*2);G.money+=b;addLog(`${NATIONS[ally].flag} Handel: +${b}$`,'g')}
+
+  // Random diplomatic events!
+  const eventRoll=Math.random();
+  if(eventRoll<.08){
+    // SPY SCANDAL – ally gets angry
+    if(G.allies.length>0){
+      const a=G.allies[Math.floor(Math.random()*G.allies.length)];
+      G.hostility[a]+=20;
+      addLog(`🕵️ Spionage-Skandal! ${NATIONS[a].flag} ist wütend! (+20 Feindseligkeit)`,'r');
+    }
+  }else if(eventRoll<.14){
+    // PEACE OFFER – random enemy cools down
+    const enemies=G.enemyNations.filter(k=>!G.allies.includes(k)&&G.hostility[k]>20);
+    if(enemies.length>0){
+      const e=enemies[Math.floor(Math.random()*enemies.length)];
+      G.hostility[e]=Math.max(0,G.hostility[e]-25);
+      addLog(`🕊️ ${NATIONS[e].flag} bietet Frieden an! (-25 Feindseligkeit)`,'g');
+    }
+  }else if(eventRoll<.18){
+    // TERRITORIAL DISPUTE – random nation gets angry at you
+    const all=G.enemyNations;
+    if(all.length>0){
+      const t=all[Math.floor(Math.random()*all.length)];
+      G.hostility[t]+=15;
+      addLog(`🗺️ Grenzstreit mit ${NATIONS[t].flag} ${NATIONS[t].name}! (+15)`,'y');
+    }
+  }else if(eventRoll<.22){
+    // CULTURAL EXCHANGE – random nation likes you more
+    const all=G.enemyNations;
+    if(all.length>0){
+      const t=all[Math.floor(Math.random()*all.length)];
+      G.hostility[t]=Math.max(0,G.hostility[t]-10);
+      addLog(`🎭 Kulturaustausch mit ${NATIONS[t].flag}! (-10)`,'g');
+    }
+  }else if(eventRoll<.25){
+    // ALLY BETRAYAL WARNING – ally considers betrayal
+    if(G.allies.length>0){
+      const a=G.allies[Math.floor(Math.random()*G.allies.length)];
+      if(G.hostility[a]>40){
+        G.hostility[a]+=10;
+        addLog(`⚠️ ${NATIONS[a].flag} zweifelt am Bündnis! (${Math.floor(G.hostility[a])}/75 = Verrat)`,'y');
+      }
+    }
+  }
+
+  // AI attacks on player (non-allies only)
   for(const k of G.enemyNations){
+    if(G.allies.includes(k))continue; // allies don't attack you!
     const h=G.hostility[k];
     if(h>60&&Math.random()<h/200)launchAttack(k);
     if(h>80&&Math.random()<.3)launchAttack(k);
@@ -827,7 +906,8 @@ function processTurn(){
     const nonPlayer=G.enemyNations;
     if(nonPlayer.length>=2){
       const a=nonPlayer[Math.floor(Math.random()*nonPlayer.length)];
-      const possible=nonPlayer.filter(k=>k!==a&&!ALLY_MAP[a]?.includes(k));
+      const aAllies=ALLY_MAP[a]||[];
+      const possible=nonPlayer.filter(k=>k!==a&&!aAllies.includes(k));
       if(possible.length>0){
         const b=possible[Math.floor(Math.random()*possible.length)];
         aiVsAiAttack(a,b);
@@ -859,7 +939,8 @@ function drawHUD(){
     <div>Tech <b style="color:#3b82f6">${Math.floor(G.tech)}</b></div><hr>
     <div>Runde <b>${G.turn}</b> · Nächste in <b style="color:#00d9ff">${nt}s</b></div>
     <div style="font-size:10px;color:#888">Deine Gebäude: ${G.buildings.length} | KI Gebäude: ${aiBldCount}</div>
-    ${G.attackMode?'<div style="font-size:12px;font-weight:900;color:#a855f7;animation:pulse 1s infinite">🎯 ANGRIFFSMODUS – Klicke auf Feind!</div>':''}`;
+    ${G.attackMode?'<div style="font-size:12px;font-weight:900;color:#a855f7">🎯 ANGRIFFSMODUS – Klicke auf Feind!</div>':''}
+    ${G.diplomacyMode?'<div style="font-size:12px;font-weight:900;color:#00ff9d">🤝 DIPLOMATIE – Klicke auf Nation! (-20$)</div>':''}`;
 }
 
 function drawIntel(){
@@ -869,12 +950,14 @@ function drawIntel(){
   for(const k of G.enemyNations){
     const n=NATIONS[k];const ai=G.ai[k];const h=G.hostility[k];
     if(!ai)continue;
-    const hCol=h>60?'#ff345d':h>30?'#ffb000':'#00ff9d';
-    const status=G.allies.includes(k)?'ALLY':h>60?'FEIND':h>30?'SPANNUNG':'OK';
+    const isAlly=G.allies.includes(k);
+    const hCol=isAlly?'#00ff9d':h>60?'#ff345d':h>30?'#ffb000':'#00ff9d';
+    const status=isAlly?'ALLY':h>60?'FEIND':h>30?'SPANNUNG':'FREUNDLICH';
     const pIcon={aggressive:'⚔️',defensive:'🛡️',diplomatic:'🤝',expansive:'📈'}[ai.personality]||'';
     const types={};ai.buildings.forEach(b=>{types[b.type]=(types[b.type]||0)+1});
     const bldSummary=Object.entries(types).map(([t,c])=>`${BLDS[t].symbol}${c}`).join(' ');
-    html+=`<div style="margin:3px 0;border-bottom:1px solid rgba(125,92,255,.1);padding-bottom:2px">${n.flag} <span style="color:${hCol}">${status}</span> ${pIcon}</div>`;
+    const hBar='█'.repeat(Math.floor(h/10))+'░'.repeat(10-Math.floor(h/10));
+    html+=`<div style="margin:3px 0;border-bottom:1px solid rgba(125,92,255,.1);padding-bottom:2px">${n.flag} <span style="color:${hCol}">${status}</span> ${pIcon} <span style="font-size:8px;color:#888">${hBar}</span></div>`;
     html+=`<div style="font-size:9px;color:#999;margin-bottom:3px">🏭${ai.buildings.length} ${bldSummary} | 💰${Math.floor(ai.money)}$</div>`;
   }
   el.innerHTML=html;
@@ -895,9 +978,10 @@ function drawBuildBar(){
 
 window.selectBuild=function(k){G.selected=k;playAlert()};
 window.openDiplomacy=function(){
-  if(G.money<20){addLog('Nicht genug Geld!','r');return}G.money-=20;
-  const neutral=G.enemyNations.filter(k=>!G.allies.includes(k)&&G.hostility[k]>10);
-  if(neutral.length>0){const t=neutral[Math.floor(Math.random()*neutral.length)];G.hostility[t]=Math.max(0,G.hostility[t]-15);addLog(`🤝 ${NATIONS[t].flag} Beziehungen verbessert!`,'g');playBuild()}
+  if(G.money<20){addLog('Nicht genug Geld! (20$ nötig)','r');playAlert();return}
+  if(G.diplomacyMode){G.diplomacyMode=false;addLog('Diplomatie abgebrochen','c');return}
+  G.diplomacyMode=true;
+  addLog('🤝 Klicke auf eine Nation für Diplomatie! (-20$)','g');playAlert();
 };
 window.doCounter=function(){
   if(G.offense<=0){addLog('Kein Raketensilo! Baue erst Silos!','r');playAlert();return}
@@ -934,6 +1018,31 @@ cv.addEventListener('click',e=>{
     return;
   }
   if(G.mode==='playing'){
+    // Check if diplomacy mode - click on nation
+    if(G.diplomacyMode){
+      for(const k of G.enemyNations){
+        const pos=MAP_POS[k];const px=pos.x*W,py=pos.y*H;
+        if(Math.hypot(e.clientX-px,e.clientY-py)<40){
+          G.diplomacyMode=false;
+          if(k===G.nation){return}
+          G.money-=20;
+          const reduction=G.allies.includes(k)?8:18;
+          G.hostility[k]=Math.max(0,G.hostility[k]-reduction);
+          if(G.allies.includes(k)){
+            addLog(`🤝 ${NATIONS[k].flag} Bündnis gestärkt! (-${reduction} Feindseligkeit)`,'g');
+          }else{
+            addLog(`🤝 ${NATIONS[k].flag} Beziehungen verbessert! (-${reduction} Feindseligkeit)`,'g');
+            if(G.hostility[k]<8&&!G.allies.includes(k)){
+              G.allies.push(k);
+              addLog(`🤝 ${NATIONS[k].flag} ${NATIONS[k].name} ist jetzt VERBÜNDET!`,'g');
+              G.flash=.3;G.flashColor='#00ff9d';
+            }
+          }
+          playBuild();return;
+        }
+      }
+      addLog('Klicke auf eine Nation! (D=Abbruch)','y');return;
+    }
     // Check if attack mode - click on enemy nation
     if(G.attackMode){
       for(const k of G.enemyNations){
@@ -954,14 +1063,14 @@ addEventListener('keydown',e=>{
   if(e.key==='r'||e.key==='R'){
     G={mode:'menu',nation:null,lastT:0,selected:'factory',mouseX:0,mouseY:0,shake:0,flash:0,flashColor:'',
       money:0,income:0,mil:0,tech:0,defense:0,offense:0,buildings:[],
-      ai:{},hostility:{},allies:[],enemyNations:[],attackMode:false,
+      ai:{},hostility:{},allies:[],enemyNations:[],attackMode:false,diplomacyMode:false,
       turn:0,turnTimer:0,turnLength:12,
       particles:[],texts:[],threats:[],attackScene:null,sceneTimer:0,log:[],
       aiBuildAnims:[],aiMissiles:[],aiExplosions:[]};return}
   if(G.mode!=='playing')return;
   if(e.key==='1')G.selected='factory';if(e.key==='2')G.selected='milbase';if(e.key==='3')G.selected='lab';
   if(e.key==='4')G.selected='defense';if(e.key==='5')G.selected='silo';
-  if(e.key==='d'||e.key==='D')window.openDiplomacy();
+  if(e.key==='d'||e.key==='D'){window.openDiplomacy();return}
   if(e.key==='k'||e.key==='K'){window.doCounter();return}
   playAlert();
 });
