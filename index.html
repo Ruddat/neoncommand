@@ -1,15 +1,1458 @@
 <!doctype html>
 <html lang="de">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Neon Command</title>
-  </head>
-  <body>
-    <div id="app">
-      <canvas id="game" aria-label="Neon Command game canvas"></canvas>
-      <div id="hud" class="hud"></div>
-    </div>
-    <script type="module" src="/src/main.js"></script>
-  </body>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NEON COMMAND – Geopolitik</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    html,body{height:100%;overflow:hidden;background:#040714;color:#fff;font-family:'Courier New',monospace}
+    canvas{display:block;cursor:crosshair}
+    #ui{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:10}
+    #ui *{pointer-events:auto}
+    .hud{position:fixed;top:10px;left:10px;padding:10px 14px;background:rgba(4,7,20,.9);border:1px solid rgba(0,217,255,.25);border-radius:6px;font-size:12px;line-height:1.7;min-width:240px}
+    .hud hr{border-color:#00d9ff22;margin:4px 0}
+    .build-bar{position:fixed;bottom:10px;left:50%;transform:translateX(-50%);display:flex;gap:5px;pointer-events:auto}
+    .bb{padding:6px 10px;background:rgba(4,7,20,.9);border:1px solid rgba(0,217,255,.2);border-radius:4px;font-size:10px;text-align:center;min-width:80px;cursor:pointer;transition:all .15s}
+    .bb:hover{border-color:#00d9ff;background:rgba(0,217,255,.1)}
+    .bb.active{border-color:#00d9ff;box-shadow:0 0 10px rgba(0,217,255,.3)}
+    .bb .k{font-weight:900;color:#00d9ff;font-size:13px}
+    .bb .n{color:#ccc;margin-top:2px}
+    .bb .c{color:#ffb000;font-size:9px}
+    .log{position:fixed;bottom:60px;left:10px;padding:8px 10px;background:rgba(4,7,20,.85);border:1px solid rgba(0,217,255,.15);border-radius:4px;font-size:11px;max-width:360px;max-height:160px;overflow-y:auto;line-height:1.5}
+    .log .g{color:#00ff9d}.log .r{color:#ff345d}.log .y{color:#ffb000}.log .c{color:#00d9ff}.log .p{color:#ff2bd6}
+    .intel{position:fixed;top:10px;right:10px;padding:10px 14px;background:rgba(4,7,20,.9);border:1px solid rgba(125,92,255,.25);border-radius:6px;font-size:11px;line-height:1.6;min-width:220px;pointer-events:none}
+    .defcon{position:fixed;top:10px;left:50%;transform:translateX(-50%);padding:4px 20px;border-radius:4px;font-size:14px;font-weight:900;letter-spacing:3px;pointer-events:none;transition:all .3s}
+  </style>
+</head>
+<body>
+<canvas id="gc"></canvas>
+<div id="ui">
+  <div id="hud" class="hud"></div>
+  <div id="intel" class="intel"></div>
+  <div id="defcon" class="defcon"></div>
+  <div id="log" class="log"></div>
+  <div id="buildbar" class="build-bar"></div>
+</div>
+
+<script>
+// ====== NEON COMMAND: GEOPOLITIK v4.0 – WOW EDITION! ======
+const cv=document.getElementById('gc'),cx=cv.getContext('2d');
+let W,H;function resize(){W=cv.width=innerWidth;H=cv.height=innerHeight}resize();addEventListener('resize',resize);
+
+// ====== AUDIO ======
+let audioCtx;
+function initAudio(){if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)()}
+function playBoom(v=.3){initAudio();const o=audioCtx.createOscillator(),g=audioCtx.createGain();o.type='sawtooth';o.frequency.setValueAtTime(150,audioCtx.currentTime);o.frequency.exponentialRampToValueAtTime(30,audioCtx.currentTime+.4);g.gain.setValueAtTime(v,audioCtx.currentTime);g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+.5);o.connect(g);g.connect(audioCtx.destination);o.start();o.stop(audioCtx.currentTime+.5);const buf=audioCtx.createBuffer(1,audioCtx.sampleRate*.2,audioCtx.sampleRate),d=buf.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*Math.exp(-i/d.length*5);const n=audioCtx.createBufferSource(),ng=audioCtx.createGain();n.buffer=buf;ng.gain.setValueAtTime(v*.8,audioCtx.currentTime);ng.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+.3);n.connect(ng);ng.connect(audioCtx.destination);n.start()}
+function playNuke(v=.5){initAudio();const t=audioCtx.currentTime;
+  // Deep rumble
+  const o1=audioCtx.createOscillator(),g1=audioCtx.createGain();o1.type='sawtooth';o1.frequency.setValueAtTime(60,t);o1.frequency.exponentialRampToValueAtTime(15,t+1.5);g1.gain.setValueAtTime(v,t);g1.gain.exponentialRampToValueAtTime(.001,t+2);o1.connect(g1);g1.connect(audioCtx.destination);o1.start();o1.stop(t+2);
+  // Crunch
+  const o2=audioCtx.createOscillator(),g2=audioCtx.createGain();o2.type='square';o2.frequency.setValueAtTime(200,t);o2.frequency.exponentialRampToValueAtTime(40,t+.6);g2.gain.setValueAtTime(v*.6,t);g2.gain.exponentialRampToValueAtTime(.001,t+.8);o2.connect(g2);g2.connect(audioCtx.destination);o2.start();o2.stop(t+.8);
+  // Long noise tail
+  const buf=audioCtx.createBuffer(1,audioCtx.sampleRate*1.5,audioCtx.sampleRate),d=buf.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*Math.exp(-i/d.length*2);const ns=audioCtx.createBufferSource(),ng=audioCtx.createGain();ns.buffer=buf;ng.gain.setValueAtTime(v*.7,t);ng.gain.exponentialRampToValueAtTime(.001,t+1.5);ns.connect(ng);ng.connect(audioCtx.destination);ns.start()}
+function playSiren(){initAudio();const o=audioCtx.createOscillator(),g=audioCtx.createGain();o.type='sine';o.frequency.setValueAtTime(400,audioCtx.currentTime);o.frequency.linearRampToValueAtTime(900,audioCtx.currentTime+.3);o.frequency.linearRampToValueAtTime(400,audioCtx.currentTime+.6);g.gain.setValueAtTime(.15,audioCtx.currentTime);g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+.8);o.connect(g);g.connect(audioCtx.destination);o.start();o.stop(audioCtx.currentTime+.8)}
+function playAlert(){initAudio();const o=audioCtx.createOscillator(),g=audioCtx.createGain();o.type='square';o.frequency.setValueAtTime(880,audioCtx.currentTime);g.gain.setValueAtTime(.1,audioCtx.currentTime);g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+.15);o.connect(g);g.connect(audioCtx.destination);o.start();o.stop(audioCtx.currentTime+.15)}
+function playBuild(){initAudio();const o=audioCtx.createOscillator(),g=audioCtx.createGain();o.type='sine';o.frequency.setValueAtTime(300,audioCtx.currentTime);o.frequency.linearRampToValueAtTime(600,audioCtx.currentTime+.1);g.gain.setValueAtTime(.12,audioCtx.currentTime);g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+.15);o.connect(g);g.connect(audioCtx.destination);o.start();o.stop(audioCtx.currentTime+.15)}
+function playBuildAI(){initAudio();const o=audioCtx.createOscillator(),g=audioCtx.createGain();o.type='triangle';o.frequency.setValueAtTime(250,audioCtx.currentTime);o.frequency.linearRampToValueAtTime(500,audioCtx.currentTime+.08);g.gain.setValueAtTime(.06,audioCtx.currentTime);g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+.1);o.connect(g);g.connect(audioCtx.destination);o.start();o.stop(audioCtx.currentTime+.1)}
+function playEMP(){initAudio();const t=audioCtx.currentTime;const o=audioCtx.createOscillator(),g=audioCtx.createGain();o.type='sine';o.frequency.setValueAtTime(2000,t);o.frequency.exponentialRampToValueAtTime(80,t+.3);g.gain.setValueAtTime(.2,t);g.gain.exponentialRampToValueAtTime(.001,t+.5);o.connect(g);g.connect(audioCtx.destination);o.start();o.stop(t+.5)}
+function playDramatic(){initAudio();const t=audioCtx.currentTime;const o=audioCtx.createOscillator(),g=audioCtx.createGain();o.type='sine';o.frequency.setValueAtTime(440,t);o.frequency.setValueAtTime(554,t+.15);o.frequency.setValueAtTime(659,t+.3);o.frequency.setValueAtTime(880,t+.45);g.gain.setValueAtTime(.15,t);g.gain.exponentialRampToValueAtTime(.001,t+.8);o.connect(g);g.connect(audioCtx.destination);o.start();o.stop(t+.8)}
+
+// ====== DATA ======
+const NATIONS={
+  usa:{name:'USA',flag:'🇺🇸',color:'#3b82f6',mil:9,eco:8,tech:9,money:500,desc:'Militärmacht, High-Tech',buildRate:.8,personality:'aggressive'},
+  eu:{name:'Europa',flag:'🇪🇺',color:'#fbbf24',mil:6,eco:9,tech:8,money:450,desc:'Wirtschaft, Diplomatie',buildRate:.9,personality:'diplomatic'},
+  russia:{name:'Russland',flag:'🇷🇺',color:'#ef4444',mil:8,eco:4,tech:5,money:300,desc:'Atomwaffen, rohe Gewalt',buildRate:.5,personality:'aggressive'},
+  china:{name:'China',flag:'🇨🇳',color:'#dc2626',mil:7,eco:8,tech:7,money:480,desc:'Produktion, Cyber-Krieg',buildRate:1.0,personality:'expansive'},
+  ukraine:{name:'Ukraine',flag:'🇺🇦',color:'#22c55e',mil:5,eco:3,tech:5,money:200,desc:'Widerstand, Verteidigung',buildRate:.6,personality:'defensive'},
+};
+const MAP_POS={usa:{x:.18,y:.35},eu:{x:.47,y:.28},russia:{x:.62,y:.22},china:{x:.72,y:.38},ukraine:{x:.53,y:.30}};
+const BLDS={
+  factory:{label:'Fabrik',key:'1',cost:60,color:'#fbbf24',symbol:'$',desc:'+15$/s'},
+  milbase:{label:'Militärbasis',key:'2',cost:80,color:'#ef4444',symbol:'M',desc:'+3 Mil/Stärke'},
+  lab:{label:'Forschungslab',key:'3',cost:70,color:'#3b82f6',symbol:'T',desc:'+2 Tech/s'},
+  defense:{label:'Abwehrsystem',key:'4',cost:100,color:'#22c55e',symbol:'D',desc:'+5 Verteidigung'},
+  silo:{label:'Raketensilo',key:'5',cost:150,color:'#a855f7',symbol:'R',desc:'Gegenangriff'},
+};
+const ALLY_MAP={usa:['eu','ukraine'],eu:['usa','ukraine'],russia:['china'],china:['russia'],ukraine:['eu','usa']};
+
+// ====== GAME STATE ======
+let G={mode:'menu',nation:null,lastT:0,selected:'factory',mouseX:0,mouseY:0,shake:0,flash:0,flashColor:'',
+  money:0,income:0,mil:0,tech:0,defense:0,offense:0,buildings:[],
+  ai:{},hostility:{},allies:[],enemyNations:[],attackMode:false,diplomacyMode:false,
+  turn:0,turnTimer:0,turnLength:12,
+  particles:[],texts:[],threats:[],attackScene:null,sceneTimer:0,log:[],
+  aiBuildAnims:[],aiMissiles:[],aiExplosions:[],
+  // WOW EFFECTS
+  shockwaves:[],       // expanding ring shockwaves
+  mushroomClouds:[],   // nuclear mushroom cloud animations
+  banner:null,         // dramatic banner text
+  bannerTimer:0,
+  defcon:5,            // DEFCON level 5=peace, 1=nuclear war
+  slowMo:0,            // slow motion timer
+  slowMoFactor:1,      // time scale
+  empFlashes:[],       // EMP lightning bolts
+  smokeTrails:[],      // smoke at launch sites
+  screenCrack:null,    // screen crack overlay
+  scanlineOffset:0,    // CRT scanline animation
+  attackCooldown:0,    // cooldown between player attacks
+};
+
+// ====== HELPERS ======
+function rnd(a,b){return a+Math.random()*(b-a)}
+function burst(x,y,c,n=12,p=1){for(let i=0;i<n;i++){const a=rnd(0,7),s=rnd(50,280)*p;G.particles.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:rnd(.3,.9),max:1,color:c,size:rnd(2,5)*p})}}
+function floatText(x,y,t,c='#fff',sz=15){G.texts.push({x,y,text:t,color:c,life:1.5,max:1.5,size:sz})}
+function addLog(m,cls='c'){G.log.push({msg:m,cls});if(G.log.length>40)G.log.shift();renderLog()}
+function renderLog(){const el=document.getElementById('log');el.innerHTML=G.log.slice(-10).map(l=>`<span class="${l.cls}">${l.msg}</span>`).join('<br>');el.scrollTop=el.scrollHeight}
+
+// ====== WOW: DRAMATIC BANNER ======
+function showBanner(text,color='#fff',duration=3){
+  G.banner={text,color};G.bannerTimer=duration;
+  playDramatic();
+}
+
+// ====== WOW: MUSHROOM CLOUD ======
+function spawnMushroom(x,y,color='#ff345d',size=1){
+  G.mushroomClouds.push({x,y,color,size,timer:0,duration:2.5});
+  // Add shockwave ring
+  G.shockwaves.push({x,y,radius:0,maxRadius:200*size,speed:300*size,life:1,max:1,color});
+  // Screen shake
+  G.shake=Math.max(G.shake,20*size);
+  G.flash=1;G.flashColor=color;
+  // Particles
+  burst(x,y,'#ffb000',30,2*size);
+  burst(x,y,color,20,1.5*size);
+  burst(x,y,'#ffffff',10,1*size);
+  // Slow motion for big ones
+  if(size>0.8){G.slowMo=0.8;G.slowMoFactor=0.3}
+}
+
+// ====== WOW: SHOCKWAVE ======
+function spawnShockwave(x,y,color='#ff345d',maxR=150){
+  G.shockwaves.push({x,y,radius:0,maxRadius:maxR,speed:250,life:1,max:1,color});
+}
+
+// ====== WOW: EMP LIGHTNING ======
+function spawnEMP(x,y){
+  G.empFlashes.push({x,y,life:.6,max:.6});
+  playEMP();
+  // Brief white flash
+  G.flash=.8;G.flashColor='#ffffff';
+}
+
+// ====== WOW: SMOKE TRAIL ======
+function spawnSmoke(x,y,color='#888'){
+  for(let i=0;i<8;i++){
+    G.smokeTrails.push({x:x+rnd(-5,5),y:y+rnd(-5,5),vx:rnd(-20,20),vy:rnd(-60,-20),life:rnd(.5,1.5),max:1.5,size:rnd(4,10),color});
+  }
+}
+
+// ====== WOW: DEFCON CALCULATOR ======
+function calcDefcon(){
+  let maxThreat=0;
+  for(const k of G.enemyNations){
+    const h=G.hostility[k]||0;
+    if(!G.allies.includes(k))maxThreat=Math.max(maxThreat,h);
+  }
+  const activeThreats=G.threats.length;
+  const hasActiveAttack=G.attackScene!==null;
+  if(hasActiveAttack||activeThreats>1)return 1;
+  if(maxThreat>80)return 2;
+  if(maxThreat>60||activeThreats>0)return 3;
+  if(maxThreat>35)return 4;
+  return 5;
+}
+
+// ====== AI STATE CREATION ======
+function createAIState(key){
+  const n=NATIONS[key];
+  return{
+    money:n.money,income:10+n.eco*2,mil:n.mil*2,tech:0,
+    defense:n.mil,offense:0,
+    buildings:[],buildTimer:0,
+    buildRate:n.buildRate,
+    personality:n.personality,
+    upgradeTimer:0,upgradeCooldown:20,
+    lastBuildType:null,
+    totalBuilt:0,
+  };
+}
+
+// ====== AI PERSONALITY-BASED BUILDING ======
+function aiPickBuild(key){
+  const ai=G.ai[key];const n=NATIONS[key];
+  const factories=ai.buildings.filter(b=>b.type==='factory').length;
+  const mils=ai.buildings.filter(b=>b.type==='milbase').length;
+  const labs=ai.buildings.filter(b=>b.type==='lab').length;
+  const defs=ai.buildings.filter(b=>b.type==='defense').length;
+  const silos=ai.buildings.filter(b=>b.type==='silo').length;
+
+  switch(ai.personality){
+    case 'aggressive':
+      if(factories<1&&ai.money>=60)return'factory';
+      if(mils<2&&ai.money>=80)return'milbase';
+      if(factories<mils&&ai.money>=60)return'factory';
+      if(silos<1&&ai.money>=150)return'silo';
+      if(mils<4&&ai.money>=80)return'milbase';
+      if(defs<1&&ai.money>=100)return'defense';
+      if(labs<1&&ai.money>=70)return'lab';
+      if(Math.random()<.4)return'milbase';
+      return'factory';
+    case 'defensive':
+      if(factories<2&&ai.money>=60)return'factory';
+      if(defs<2&&ai.money>=100)return'defense';
+      if(mils<1&&ai.money>=80)return'milbase';
+      if(labs<1&&ai.money>=70)return'lab';
+      if(factories<4&&ai.money>=60)return'factory';
+      if(defs<3&&ai.money>=100)return'defense';
+      if(silos<1&&ai.money>=150)return'silo';
+      return Math.random()<.5?'defense':'factory';
+    case 'diplomatic':
+      if(factories<3&&ai.money>=60)return'factory';
+      if(labs<2&&ai.money>=70)return'lab';
+      if(defs<1&&ai.money>=100)return'defense';
+      if(mils<1&&ai.money>=80)return'milbase';
+      if(factories<5&&ai.money>=60)return'factory';
+      if(defs<2&&ai.money>=100)return'defense';
+      if(Math.random()<.3)return'lab';
+      return'factory';
+    case 'expansive':
+      if(factories<mils+2&&ai.money>=60)return'factory';
+      if(mils<2&&ai.money>=80)return'milbase';
+      if(labs<mils&&ai.money>=70)return'lab';
+      if(factories<3&&ai.money>=60)return'factory';
+      if(defs<2&&ai.money>=100)return'defense';
+      if(silos<1&&ai.money>=150)return'silo';
+      if(Math.random()<.3)return'factory';
+      if(Math.random()<.5)return'milbase';
+      return'lab';
+  }
+  const r=Math.random();
+  if(r<.4)return'factory';if(r<.65)return'milbase';if(r<.8)return'lab';if(r<.9)return'defense';return'silo';
+}
+
+function aiBuild(key){
+  const ai=G.ai[key];const n=NATIONS[key];const pos=MAP_POS[key];
+  const type=aiPickBuild(key);
+  const spec=BLDS[type];
+  if(!spec||ai.money<spec.cost)return;
+
+  const cx_=pos.x*W,cy_=pos.y*H;
+  const buildingIndex=ai.buildings.length;
+  const ring=Math.floor(buildingIndex/6);
+  const angleInRing=(buildingIndex%6)/6*Math.PI*2+ring*0.5;
+  const dist=35+ring*30+rnd(-10,10);
+  const bx=cx_+Math.cos(angleInRing)*dist;
+  const by=cy_+Math.sin(angleInRing)*dist;
+
+  for(const b of ai.buildings){if(Math.hypot(b.x-bx,b.y-by)<25)return}
+
+  ai.money-=spec.cost;
+  ai.buildings.push({type,x:bx,y:by,level:1,hp:100,maxHp:100,builtAt:Date.now()});
+  ai.totalBuilt++;
+
+  if(type==='milbase')ai.mil+=3;
+  if(type==='defense')ai.defense+=5;
+  if(type==='silo')ai.offense+=15;
+
+  G.aiBuildAnims.push({x:bx,y:by,color:n.color,type,nation:key,timer:0,duration:1.5});
+  burst(bx,by,n.color,15,.8);
+  burst(bx,by,spec.color,8,.6);
+  floatText(bx,by-30,`${n.flag}${spec.label}`,n.color);
+
+  addLog(`📡 Intel: ${n.flag} baut ${spec.label} (${ai.buildings.length} Gebäude)`,'y');
+  playBuildAI();
+}
+
+function aiUpgrade(key){
+  const ai=G.ai[key];const n=NATIONS[key];
+  if(ai.buildings.length===0)return;
+  const upgradeable=ai.buildings.filter(b=>b.level<3);
+  if(upgradeable.length===0)return;
+
+  const b=upgradeable[Math.floor(Math.random()*upgradeable.length)];
+  const spec=BLDS[b.type];
+  const upgradeCost=Math.floor(spec.cost*b.level*0.8);
+  if(ai.money<upgradeCost)return;
+
+  ai.money-=upgradeCost;
+  b.level++;
+  b.hp=100*b.level;
+  b.maxHp=100*b.level;
+
+  if(b.type==='milbase')ai.mil+=2;
+  if(b.type==='defense')ai.defense+=3;
+  if(b.type==='silo')ai.offense+=10;
+
+  G.aiBuildAnims.push({x:b.x,y:b.y,color:n.color,type:'upgrade',nation:key,timer:0,duration:1});
+  burst(b.x,b.y,'#ffffff',10,.6);
+  floatText(b.x,b.y-25,`⬆ Lvl ${b.level}`,n.color);
+  addLog(`📡 Intel: ${n.flag} verbessert ${spec.label} → Lvl ${b.level}`,'y');
+}
+
+function updateAI(key,dt){
+  const ai=G.ai[key];const n=NATIONS[key];
+  if(!ai)return;
+
+  const facs=ai.buildings.filter(b=>b.type==='factory');
+  const facIncome=facs.reduce((s,b)=>s+15*b.level,0);
+  ai.income=10+n.eco*2+facIncome;
+  ai.money+=ai.income*dt;
+
+  const labs=ai.buildings.filter(b=>b.type==='lab');
+  const labTech=labs.reduce((s,b)=>s+2*b.level,0);
+  ai.tech+=labTech*dt;
+
+  const mils=ai.buildings.filter(b=>b.type==='milbase');
+  const milGrowth=mils.reduce((s,b)=>s+0.5*b.level,0);
+  ai.mil+=(0.5+milGrowth)*dt;
+
+  const defs=ai.buildings.filter(b=>b.type==='defense');
+  const defTotal=defs.reduce((s,b)=>s+5*b.level,0);
+  const silos=ai.buildings.filter(b=>b.type==='silo');
+  const siloTotal=silos.reduce((s,b)=>s+15*b.level,0);
+  ai.defense=n.mil+defTotal;
+  ai.offense=siloTotal;
+
+  ai.buildTimer+=dt;
+  const moneyBoost=ai.money>500?0.7:ai.money>300?0.85:1;
+  const buildInterval=7/ai.buildRate*moneyBoost;
+  if(ai.buildTimer>=buildInterval){ai.buildTimer=0;aiBuild(key)}
+
+  ai.upgradeTimer+=dt;
+  if(ai.upgradeTimer>=ai.upgradeCooldown&&ai.buildings.length>=3){ai.upgradeTimer=0;aiUpgrade(key)}
+}
+
+// ====== COUNTRY SELECTION ======
+function drawCountrySelect(){
+  cx.fillStyle='rgba(0,0,0,.6)';cx.fillRect(0,0,W,H);
+  cx.textAlign='center';
+  // Glitch title effect
+  const glitchX=Math.random()<.05?rnd(-3,3):0;
+  const glitchY=Math.random()<.05?rnd(-2,2):0;
+  cx.save();cx.shadowColor='#ff2bd6';cx.shadowBlur=30;
+  cx.fillStyle='#00d9ff';cx.font='900 64px Arial';cx.fillText('NEON COMMAND',W/2+glitchX,H*.1+glitchY);
+  cx.restore();
+  cx.fillStyle='#ff2bd6';cx.font='900 32px Arial';cx.fillText('GEOPOLITIK',W/2,H*.1+45);
+  cx.fillStyle='#aaa';cx.font='14px Arial';cx.fillText('Wähle deine Nation – Alle Nationen bauen, kämpfen und entwickeln sich!',W/2,H*.1+75);
+  const keys=Object.keys(NATIONS);const cardW=150,cardH=190,gap=14;
+  const totalW=keys.length*cardW+(keys.length-1)*gap;const startX=(W-totalW)/2;const startY=H*.24;
+  keys.forEach((k,i)=>{
+    const n=NATIONS[k];const x=startX+i*(cardW+gap);
+    const hover=G.mouseX>x&&G.mouseX<x+cardW&&G.mouseY>startY&&G.mouseY<startY+cardH;
+    cx.fillStyle=hover?'rgba(0,217,255,.12)':'rgba(20,20,40,.85)';cx.fillRect(x,startY,cardW,cardH);
+    cx.strokeStyle=hover?n.color:'rgba(255,255,255,.15)';cx.lineWidth=hover?2:1;cx.strokeRect(x,startY,cardW,cardH);
+    cx.fillStyle=n.color;cx.font='36px Arial';cx.fillText(n.flag,x+cardW/2,startY+40);
+    cx.fillStyle='#fff';cx.font='900 15px Arial';cx.fillText(n.name,x+cardW/2,startY+65);
+    cx.fillStyle='#aaa';cx.font='10px Arial';
+    cx.fillText(`Mil ${'█'.repeat(n.mil)}${'░'.repeat(10-n.mil)}`,x+cardW/2,startY+88);
+    cx.fillText(`Öko ${'█'.repeat(n.eco)}${'░'.repeat(10-n.eco)}`,x+cardW/2,startY+103);
+    cx.fillText(`Tech ${'█'.repeat(n.tech)}${'░'.repeat(10-n.tech)}`,x+cardW/2,startY+118);
+    const pLabel={aggressive:'⚔️ Aggressiv',defensive:'🛡️ Defensiv',diplomatic:'🤝 Diplomatisch',expansive:'📈 Expansiv'}[n.personality]||'';
+    cx.fillStyle=n.color;cx.font='10px Arial';cx.fillText(pLabel,x+cardW/2,startY+138);
+    cx.fillStyle='#888';cx.font='9px Arial';
+    const words=n.desc.split(' ');let line='',ly=startY+155;
+    for(const w of words){if((line+' '+w).length>20){cx.fillText(line.trim(),x+cardW/2,ly);ly+=11;line=w}else{line+=' '+w}}
+    if(line)cx.fillText(line.trim(),x+cardW/2,ly);
+  });
+  cx.fillStyle='#555';cx.font='12px Arial';cx.fillText('Klick auf eine Nation zum Starten',W/2,H-40);cx.textAlign='left';
+}
+
+function selectNation(key){
+  const n=NATIONS[key];
+  G.nation=key;G.money=n.money;G.mil=n.mil*2;G.income=10+n.eco*2;
+  G.defense=n.mil;G.offense=0;G.tech=0;G.buildings=[];
+  G.mode='playing';G.turn=0;G.turnTimer=0;
+  G.ai={};G.hostility={};G.aiBuildAnims=[];G.aiMissiles=[];G.aiExplosions=[];
+  G.shockwaves=[];G.mushroomClouds=[];G.empFlashes=[];G.smokeTrails=[];
+  G.banner=null;G.bannerTimer=0;G.defcon=5;G.slowMo=0;G.slowMoFactor=1;
+  G.attackCooldown=0;G.screenCrack=null;
+  for(const k of Object.keys(NATIONS)){
+    if(k!==key)G.ai[k]=createAIState(k);
+    G.hostility[k]=k===key?0:10+rnd(0,20);
+  }
+  G.allies=ALLY_MAP[key]||[];
+  G.enemyNations=Object.keys(NATIONS).filter(k=>k!==key);
+  G.allies.forEach(a=>G.hostility[a]=Math.max(0,G.hostility[a]-15));
+  addLog(`${n.flag} ${n.name} gewählt!`,'g');
+  addLog(`Militär: ${n.mil} | Wirtschaft: ${n.eco} | Tech: ${n.tech}`,'c');
+  addLog('Alle Nationen bauen und entwickeln sich!','y');
+  addLog('Baue Fabriken für Geld, dann Verteidigung!','y');
+  showBanner(`${n.flag} ${n.name} AUFGEBAUT!`,n.color,2);
+  playBuild();
+}
+
+// ====== DRAWING ======
+function drawBuilding(b,alpha=1,nationColor=null){
+  const spec=BLDS[b.type];if(!spec)return;
+  const age=b.builtAt?Math.min(1,(Date.now()-b.builtAt)/500):1;
+  const pulse=1+Math.sin(Date.now()*.003+b.x)*.1;
+  const levelScale=1+(b.level-1)*.12;
+  cx.save();
+  cx.shadowColor=nationColor||spec.color;
+  cx.shadowBlur=(8*pulse+(b.level-1)*4)*age;
+  cx.fillStyle=nationColor||spec.color;
+  cx.globalAlpha=alpha*age*.9;
+  const s=levelScale*age;
+  cx.translate(b.x,b.y);cx.scale(s,s);
+  if(b.type==='factory'){
+    cx.fillRect(-9,-9,18,18);cx.fillStyle='#000';cx.font='bold 11px Arial';cx.textAlign='center';cx.fillText('$',0,4);
+    if(b.level>1){cx.fillStyle=spec.color;cx.font='bold 7px Arial';cx.fillText(b.level,7,-6)}
+  }else if(b.type==='milbase'){
+    cx.beginPath();cx.moveTo(0,-12);cx.lineTo(11,8);cx.lineTo(-11,8);cx.closePath();cx.fill();
+    cx.fillStyle='#000';cx.font='9px Arial';cx.textAlign='center';cx.fillText('M',0,4);
+    if(b.level>1){cx.fillStyle=spec.color;cx.font='bold 7px Arial';cx.fillText(b.level,7,-6)}
+  }else if(b.type==='lab'){
+    cx.beginPath();cx.moveTo(0,-11);cx.lineTo(9,0);cx.lineTo(0,11);cx.lineTo(-9,0);cx.closePath();cx.fill();
+    cx.fillStyle='#000';cx.font='9px Arial';cx.textAlign='center';cx.fillText('T',0,4);
+    if(b.level>1){cx.fillStyle=spec.color;cx.font='bold 7px Arial';cx.fillText(b.level,7,-6)}
+  }else if(b.type==='defense'){
+    cx.beginPath();cx.arc(0,0,11,0,7);cx.fill();
+    cx.fillStyle='#000';cx.font='bold 9px Arial';cx.textAlign='center';cx.fillText('D',0,3);
+    if(b.level>1){cx.fillStyle=spec.color;cx.font='bold 7px Arial';cx.fillText(b.level,7,-6)}
+    cx.strokeStyle=nationColor||spec.color;cx.lineWidth=1+b.level;cx.globalAlpha=alpha*age*.3;cx.beginPath();cx.arc(0,0,14+b.level*2,0,7);cx.stroke();
+  }else if(b.type==='silo'){
+    cx.fillRect(-5,-12,10,24);cx.fillStyle='#000';cx.font='9px Arial';cx.textAlign='center';cx.fillText('R',0,3);
+    if(b.level>1){cx.fillStyle=spec.color;cx.font='bold 7px Arial';cx.fillText(b.level,5,-8)}
+  }
+  cx.textAlign='left';cx.globalAlpha=1;cx.restore();
+}
+
+function drawContinent(x,y,w,h,color){
+  cx.fillStyle=color;cx.beginPath();
+  cx.moveTo(W*x,H*y);cx.quadraticCurveTo(W*(x+w*.3),H*(y-h*.1),W*(x+w),H*(y+h*.2));
+  cx.quadraticCurveTo(W*(x+w*1.1),H*(y+h*.6),W*(x+w*.7),H*(y+h));
+  cx.quadraticCurveTo(W*(x+w*.3),H*(y+h*1.05),W*x,H*(y+h*.7));
+  cx.quadraticCurveTo(W*(x-w*.05),H*(y+h*.3),W*x,H*y);
+  cx.fill();cx.strokeStyle='rgba(0,217,255,.06)';cx.lineWidth=1;cx.stroke();
+}
+
+// ====== WOW: DRAW MUSHROOM CLOUD ======
+function drawMushroomCloud(mc){
+  const progress=mc.timer/mc.duration;
+  const alpha=progress<.3?progress/.3:1-(progress-.3)/.7;
+  if(alpha<=0)return;
+  const x=mc.x,y=mc.y,s=mc.size;
+
+  cx.save();cx.globalAlpha=alpha*.8;
+
+  // Stem (rising column)
+  const stemH=80*s*Math.min(1,progress*3);
+  const stemW=12*s;
+  const stemGrad=cx.createLinearGradient(x,y,x,y-stemH);
+  stemGrad.addColorStop(0,mc.color);stemGrad.addColorStop(.5,'#ffb000');stemGrad.addColorStop(1,'#ffffff');
+  cx.fillStyle=stemGrad;
+  cx.fillRect(x-stemW,y-stemH,stemW*2,stemH);
+
+  // Cap (mushroom top)
+  if(progress>.1){
+    const capProgress=Math.min(1,(progress-.1)/.4);
+    const capW=60*s*capProgress;
+    const capH=25*s*capProgress;
+    const capY=y-stemH;
+    const capGrad=cx.createRadialGradient(x,capY,0,x,capY,capW);
+    capGrad.addColorStop(0,'#ffffff');capGrad.addColorStop(.3,'#ffb000');capGrad.addColorStop(.7,mc.color);capGrad.addColorStop(1,'rgba(255,50,50,0)');
+    cx.fillStyle=capGrad;
+    cx.beginPath();cx.ellipse(x,capY,capW,capH,0,0,Math.PI*2);cx.fill();
+
+    // Inner bright core
+    cx.globalAlpha=alpha*.5*capProgress;
+    cx.fillStyle='#ffffff';
+    cx.beginPath();cx.ellipse(x,capY,capW*.4,capH*.5,0,0,Math.PI*2);cx.fill();
+  }
+
+  // Rising fire particles
+  if(progress<.6){
+    for(let i=0;i<3;i++){
+      const px=x+rnd(-15*s,15*s);
+      const py=y-rnd(0,stemH);
+      const ps=rnd(2,6)*s;
+      cx.globalAlpha=alpha*.6;
+      cx.fillStyle=Math.random()>.5?'#ffb000':'#ff345d';
+      cx.beginPath();cx.arc(px,py,ps,0,7);cx.fill();
+    }
+  }
+
+  cx.restore();
+}
+
+// ====== WOW: DRAW SHOCKWAVE ======
+function drawShockwave(sw){
+  const alpha=sw.life/sw.max;
+  cx.save();cx.globalAlpha=alpha*.7;
+  cx.strokeStyle=sw.color;cx.lineWidth=3*(1-alpha)+1;
+  cx.beginPath();cx.arc(sw.x,sw.y,sw.radius,0,Math.PI*2);cx.stroke();
+  // Inner glow
+  cx.globalAlpha=alpha*.2;cx.fillStyle=sw.color;
+  cx.beginPath();cx.arc(sw.x,sw.y,sw.radius*.8,0,Math.PI*2);cx.fill();
+  cx.restore();
+}
+
+// ====== WOW: DRAW EMP LIGHTNING ======
+function drawEMP(emp){
+  const alpha=emp.life/emp.max;
+  cx.save();cx.globalAlpha=alpha;cx.strokeStyle='#ffffff';cx.lineWidth=2;
+
+  // Draw jagged lightning bolts
+  for(let b=0;b<3;b++){
+    const angle=b*2.094+rnd(-.3,.3); // 120 degrees apart + randomness
+    let lx=emp.x,ly=emp.y;
+    const len=rnd(60,120);
+    cx.beginPath();cx.moveTo(lx,ly);
+    for(let s=0;s<6;s++){
+      lx+=Math.cos(angle+rnd(-.5,.5))*len/6;
+      ly+=Math.sin(angle+rnd(-.5,.5))*len/6;
+      cx.lineTo(lx,ly);
+    }
+    cx.stroke();
+  }
+  // Central flash
+  cx.globalAlpha=alpha*.5;cx.fillStyle='#ffffff';
+  cx.beginPath();cx.arc(emp.x,emp.y,20*alpha,0,7);cx.fill();
+  cx.restore();
+}
+
+// ====== WOW: DRAW BANNER ======
+function drawBanner(){
+  if(!G.banner||G.bannerTimer<=0)return;
+  const alpha=G.bannerTimer<0.5?G.bannerTimer/0.5:G.bannerTimer>2.5?1-(G.bannerTimer-2.5)/0.5:1;
+  if(alpha<=0)return;
+
+  cx.save();cx.globalAlpha=alpha;
+  // Full-width banner strip
+  cx.fillStyle='rgba(0,0,0,.7)';
+  const bannerY=H*.4;
+  cx.fillRect(0,bannerY,W,60);
+  // Colored borders
+  cx.fillStyle=G.banner.color;cx.fillRect(0,bannerY,W,3);cx.fillRect(0,bannerY+57,W,3);
+  // Text
+  cx.textAlign='center';cx.font='900 36px Arial';cx.fillStyle=G.banner.color;
+  cx.shadowColor=G.banner.color;cx.shadowBlur=20;
+  cx.fillText(G.banner.text,W/2,bannerY+40);
+  cx.textAlign='left';cx.restore();
+}
+
+// ====== WOW: DRAW CRT SCANLINES ======
+function drawScanlines(){
+  cx.save();cx.globalAlpha=.03;
+  cx.fillStyle='#000';
+  for(let y=0;y<H;y+=3){
+    cx.fillRect(0,y,W,1);
+  }
+  // Subtle vignette
+  const vg=cx.createRadialGradient(W/2,H/2,Math.min(W,H)*.3,W/2,H/2,Math.max(W,H)*.8);
+  vg.addColorStop(0,'rgba(0,0,0,0)');vg.addColorStop(1,'rgba(0,0,0,.4)');
+  cx.globalAlpha=1;cx.fillStyle=vg;cx.fillRect(0,0,W,H);
+  cx.restore();
+}
+
+// ====== WOW: DRAW DEFCON INDICATOR ======
+function updateDefconDisplay(){
+  const el=document.getElementById('defcon');
+  const dc=G.defcon;
+  const colors={1:'#ff0000',2:'#ff345d',3:'#ffb000',4:'#fbbf24',5:'#00ff9d'};
+  const labels={1:'DEFCON 1 – ATOMKRIEG',2:'DEFCON 2 – KRITISCH',3:'DEFCON 3 – ERHÖHT',4:'DEFCON 4 – WACHSAM',5:'DEFCON 5 – FRIEDEN'};
+  const bg={1:'rgba(255,0,0,.25)',2:'rgba(255,52,93,.2)',3:'rgba(255,176,0,.15)',4:'rgba(251,191,36,.1)',5:'rgba(0,255,157,.08)'};
+  el.style.background=bg[dc];
+  el.style.border=`2px solid ${colors[dc]}`;
+  el.style.color=colors[dc];
+  el.textContent=labels[dc];
+  if(dc<=2)el.style.textShadow=`0 0 10px ${colors[dc]}`;
+  else el.style.textShadow='none';
+}
+
+function drawWorldMap(){
+  const g=cx.createLinearGradient(0,0,0,H);g.addColorStop(0,'#040714');g.addColorStop(1,'#020308');
+  cx.fillStyle=g;cx.fillRect(0,0,W,H);
+  cx.strokeStyle='rgba(0,217,255,.04)';cx.lineWidth=1;
+  for(let x=0;x<W;x+=60){cx.beginPath();cx.moveTo(x,0);cx.lineTo(x,H);cx.stroke()}
+  for(let y=0;y<H;y+=60){cx.beginPath();cx.moveTo(0,y);cx.lineTo(W,y);cx.stroke()}
+
+  cx.save();drawContinent(.12,.2,.16,.25,'#1a2744');drawContinent(.18,.5,.1,.25,'#1a2744');
+  drawContinent(.43,.18,.08,.18,'#1a2744');drawContinent(.44,.42,.1,.25,'#1a2744');
+  drawContinent(.5,.12,.25,.2,'#1a2744');drawContinent(.65,.25,.12,.22,'#1a2744');
+  drawContinent(.52,.35,.08,.1,'#1a2744');cx.restore();
+
+  if(G.nation){
+    // Draw AI build zones (subtle circles)
+    for(const k of G.enemyNations){
+      const ai=G.ai[k];if(!ai||ai.buildings.length===0)continue;
+      const pos=MAP_POS[k];const n=NATIONS[k];
+      const maxRing=Math.floor(ai.buildings.length/6)+1;
+      const zoneRadius=35+maxRing*30+20;
+      cx.save();cx.strokeStyle=n.color+'15';cx.lineWidth=1;cx.setLineDash([4,6]);
+      cx.beginPath();cx.arc(pos.x*W,pos.y*H,zoneRadius,0,7);cx.stroke();cx.setLineDash([]);cx.restore();
+    }
+
+    // Draw player build zone circle
+    const cp=MAP_POS[G.nation];
+    cx.save();cx.strokeStyle=NATIONS[G.nation].color+'33';cx.lineWidth=1.5;cx.setLineDash([6,6]);
+    cx.beginPath();cx.arc(cp.x*W,cp.y*H,180,0,7);cx.stroke();cx.setLineDash([]);cx.restore();
+
+    // Draw ALL AI buildings with nation colors
+    for(const k of G.enemyNations){
+      const ai=G.ai[k];if(!ai)continue;
+      const n=NATIONS[k];
+      for(const b of ai.buildings){
+        cx.save();cx.strokeStyle=n.color+'0a';cx.lineWidth=1;
+        cx.beginPath();cx.moveTo(b.x,b.y);cx.lineTo(MAP_POS[k].x*W,MAP_POS[k].y*H);cx.stroke();cx.restore();
+        drawBuilding(b,.65,n.color);
+      }
+    }
+
+    // Draw player buildings
+    for(const b of G.buildings)drawBuilding(b,1,NATIONS[G.nation].color);
+
+    // Draw AI build animations (expanding rings)
+    for(const a of G.aiBuildAnims){
+      const progress=a.timer/a.duration;
+      const radius=30*progress;
+      const alpha=1-progress;
+      cx.save();cx.strokeStyle=a.color;cx.globalAlpha=alpha*.6;cx.lineWidth=2;
+      cx.beginPath();cx.arc(a.x,a.y,radius,0,7);cx.stroke();
+      cx.globalAlpha=alpha*.3;cx.fillStyle=a.color;
+      cx.beginPath();cx.arc(a.x,a.y,radius*.5,0,7);cx.fill();cx.restore();
+      if(a.type==='upgrade'){
+        cx.save();cx.strokeStyle='#ffffff';cx.globalAlpha=alpha*.5;cx.lineWidth=1;
+        cx.beginPath();cx.arc(a.x,a.y,radius*1.5,0,7);cx.stroke();cx.restore();
+      }
+    }
+
+    // Ghost building at cursor
+    if(G.selected&&canBuild(G.selected,G.mouseX,G.mouseY)){
+      const spec=BLDS[G.selected];
+      cx.save();cx.globalAlpha=.4;cx.fillStyle=spec.color;
+      if(G.selected==='factory')cx.fillRect(G.mouseX-9,G.mouseY-9,18,18);
+      else if(G.selected==='milbase'){cx.beginPath();cx.moveTo(G.mouseX,G.mouseY-12);cx.lineTo(G.mouseX+11,G.mouseY+8);cx.lineTo(G.mouseX-11,G.mouseY+8);cx.closePath();cx.fill()}
+      else if(G.selected==='lab'){cx.beginPath();cx.moveTo(G.mouseX,G.mouseY-11);cx.lineTo(G.mouseX+9,G.mouseY);cx.lineTo(G.mouseX,G.mouseY+11);cx.lineTo(G.mouseX-9,G.mouseY);cx.closePath();cx.fill()}
+      else if(G.selected==='defense'){cx.beginPath();cx.arc(G.mouseX,G.mouseY,11,0,7);cx.fill()}
+      else if(G.selected==='silo')cx.fillRect(G.mouseX-5,G.mouseY-12,10,24);
+      cx.restore();
+    }else if(G.selected){cx.save();cx.globalAlpha=.25;cx.fillStyle='#ff345d';cx.beginPath();cx.arc(G.mouseX,G.mouseY,12,0,7);cx.fill();cx.restore()}
+  }
+
+  // Draw smoke trails
+  for(const s of G.smokeTrails){
+    const a=Math.max(0,s.life/s.max);
+    cx.save();cx.globalAlpha=a*.4;cx.fillStyle=s.color;
+    cx.beginPath();cx.arc(s.x,s.y,s.size,0,7);cx.fill();cx.restore();
+  }
+
+  // Draw AI vs AI missiles + player counter missiles
+  for(const m of G.aiMissiles){
+    cx.save();cx.shadowColor=m.color||'#ff345d';cx.shadowBlur=15;cx.fillStyle=m.color||'#ff345d';
+    const angle=Math.atan2(m.vy,m.vx);cx.translate(m.x,m.y);cx.rotate(angle);
+    cx.fillRect(-12,-3,24,6);cx.fillStyle='#ffb000';cx.fillRect(12,-2,6,4);cx.restore();
+    // Trail
+    cx.save();cx.strokeStyle=(m.color||'#ff345d')+'66';cx.lineWidth=2;cx.beginPath();
+    cx.moveTo(m.x,m.y);cx.lineTo(m.x-m.vx*.08,m.y-m.vy*.08);cx.stroke();cx.restore();
+  }
+  for(const e of G.aiExplosions){
+    const a=e.life/e.max;cx.save();
+    const eg=cx.createRadialGradient(e.x,e.y,0,e.x,e.y,e.size*a);
+    eg.addColorStop(0,'rgba(255,200,50,'+a+')');eg.addColorStop(.4,'rgba(255,100,30,'+(a*.6)+')');eg.addColorStop(1,'rgba(255,50,50,0)');
+    cx.fillStyle=eg;cx.beginPath();cx.arc(e.x,e.y,e.size*a,0,7);cx.fill();cx.restore();
+  }
+
+  // Nation markers
+  for(const[k,pos]of Object.entries(MAP_POS)){
+    const px=pos.x*W,py=pos.y*H,n=NATIONS[k],isP=k===G.nation,h=G.hostility[k]||0;
+    const ai=G.ai[k];const bCount=ai?ai.buildings.length:G.buildings.length;
+    const mouseNear=Math.hypot(G.mouseX-px,G.mouseY-py)<40;
+    const isAttackTarget=G.attackMode&&!isP&&!G.allies.includes(k)&&mouseNear;
+    const radius=isP?50:h>50?35:h>30?28:22;
+    cx.save();
+    const glow=cx.createRadialGradient(px,py,0,px,py,radius);
+    if(isAttackTarget){glow.addColorStop(0,'#a855f7aa');glow.addColorStop(1,'#a855f700')}
+    else if(isP){glow.addColorStop(0,n.color+'55');glow.addColorStop(1,n.color+'00')}
+    else if(h>60){glow.addColorStop(0,'#ff345d44');glow.addColorStop(1,'#ff345d00')}
+    else if(G.allies.includes(k)){glow.addColorStop(0,'#00ff9d33');glow.addColorStop(1,'#00ff9d00')}
+    else{glow.addColorStop(0,'#ffffff11');glow.addColorStop(1,'#ffffff00')}
+    cx.fillStyle=glow;cx.beginPath();cx.arc(px,py,isAttackTarget?radius*1.5:radius,0,7);cx.fill();cx.restore();
+
+    // Attack mode targeting ring
+    if(G.attackMode&&!isP&&!G.allies.includes(k)){
+      cx.save();cx.strokeStyle=mouseNear?'#a855f7':'#a855f733';
+      cx.lineWidth=mouseNear?3:1;cx.setLineDash(mouseNear?[]:[4,4]);
+      cx.beginPath();cx.arc(px,py,35+Math.sin(Date.now()*.005)*5,0,7);cx.stroke();
+      cx.setLineDash([]);cx.restore();
+    }
+    // Diplomacy mode targeting ring (green)
+    if(G.diplomacyMode&&!isP){
+      cx.save();cx.strokeStyle=mouseNear?'#00ff9d':'#00ff9d33';
+      cx.lineWidth=mouseNear?3:1;cx.setLineDash(mouseNear?[]:[4,4]);
+      cx.beginPath();cx.arc(px,py,35+Math.sin(Date.now()*.004)*4,0,7);cx.stroke();
+      cx.setLineDash([]);cx.restore();
+    }
+
+    cx.save();cx.shadowColor=isAttackTarget?'#a855f7':n.color;cx.shadowBlur=isAttackTarget?25:isP?20:10;
+    cx.fillStyle=isAttackTarget?'#a855f7':isP?n.color:h>60?'#ff345d':G.allies.includes(k)?'#00ff9d':'#666';
+    cx.beginPath();cx.arc(px,py,isP?10:7,0,7);cx.fill();cx.restore();
+
+    cx.textAlign='center';cx.font=isP?'bold 13px Arial':'11px Arial';
+    cx.fillStyle=isP?n.color:'#aaa';
+    cx.fillText(`${n.flag} ${n.name}`,px,py-18);
+
+    if(!isP&&ai){
+      cx.font='8px Arial';cx.fillStyle='#888';
+      cx.fillText(`🏭${bCount} ⚔️${Math.floor(ai.mil)} 🛡️${Math.floor(ai.defense)} 💰${Math.floor(ai.money)}$`,px,py+38);
+      const pIcon={aggressive:'⚔️',defensive:'🛡️',diplomatic:'🤝',expansive:'📈'}[ai.personality]||'';
+      cx.fillStyle='#666';cx.font='8px Arial';
+      cx.fillText(pIcon,px,py+48);
+    }
+
+    if(!isP){
+      const bw=40,bh=4,bx=px-bw/2,by=py+16;
+      cx.fillStyle='rgba(0,0,0,.6)';cx.fillRect(bx,by,bw,bh);
+      cx.fillStyle=h>60?'#ff345d':h>30?'#ffb000':'#00ff9d';
+      cx.fillRect(bx,by,bw*Math.min(1,h/100),bh);
+      cx.fillStyle='#666';cx.font='8px Arial';
+      cx.fillText(G.allies.includes(k)?'VERBÜNDET':h>60?'FEINDLICH':h>30?'SPANNUNG':'NEUTRAL',px,py+28);
+    }
+    cx.textAlign='left';
+  }
+
+  // Threat lines
+  if(G.nation){
+    const mp=MAP_POS[G.nation],mx=mp.x*W,my=mp.y*H;
+    for(const k of G.enemyNations){
+      const h=G.hostility[k];if(h>40){
+        const tp=MAP_POS[k];cx.save();
+        cx.strokeStyle=h>70?'rgba(255,52,93,.3)':'rgba(255,176,0,.15)';cx.lineWidth=h>70?2:1;cx.setLineDash([8,8]);
+        cx.beginPath();cx.moveTo(mx,my);cx.lineTo(tp.x*W,tp.y*H);cx.stroke();cx.setLineDash([]);cx.restore();
+      }
+    }
+  }
+
+  // Threat missiles on map (enemy rockets flying toward player)
+  for(const t of G.threats){
+    const from=MAP_POS[t.from],to=MAP_POS[G.nation];
+    const progress=Math.min(1,t.timer/t.duration);
+    const px=from.x*W+(to.x*W-from.x*W)*progress,py=from.y*H+(to.y*H-from.y*H)*progress;
+    const n=NATIONS[t.from];
+    const angle=Math.atan2(to.y*H-from.y*H,to.x*W-from.x*W);
+    cx.save();cx.shadowColor='#ff345d';cx.shadowBlur=15;cx.fillStyle=n.color||'#ff345d';
+    cx.translate(px,py);cx.rotate(angle);
+    cx.fillRect(-8,-3,16,6);cx.fillStyle='#ffb000';cx.fillRect(8,-2,6,4);cx.restore();
+    cx.save();cx.strokeStyle='rgba(255,52,93,.5)';cx.lineWidth=2;cx.beginPath();
+    cx.moveTo(from.x*W,from.y*H);cx.lineTo(px,py);cx.stroke();cx.restore();
+    cx.save();cx.fillStyle='#ff345d';cx.font='bold 10px Arial';cx.textAlign='center';
+    cx.fillText(`⚔️${t.strength}`,px,py-12);cx.textAlign='left';cx.restore();
+  }
+
+  // Attack scene – NO dark overlay, rockets fly over map!
+  if(G.flash>0){cx.fillStyle=G.flashColor+'22';cx.fillRect(0,0,W,H)}
+  if(G.attackScene){
+    for(const m of G.attackScene.missiles||[]){
+      const mc=m.color||'#ff345d';
+      cx.save();cx.shadowColor=mc;cx.shadowBlur=20;cx.fillStyle=mc;
+      const angle=Math.atan2(m.vy,m.vx);cx.translate(m.x,m.y);cx.rotate(angle);
+      cx.fillRect(-14,-3,28,6);cx.fillStyle='#ffb000';cx.fillRect(14,-2,8,4);cx.restore();
+      cx.save();cx.strokeStyle=mc+'88';cx.lineWidth=3;cx.beginPath();cx.moveTo(m.x,m.y);cx.lineTo(m.x-m.vx*.12,m.y-m.vy*.12);cx.stroke();cx.restore();
+    }
+    for(const e of G.attackScene.explosions||[]){
+      const a=e.life/e.max;const ec=e.color||'#ff345d';cx.save();
+      const eg=cx.createRadialGradient(e.x,e.y,0,e.x,e.y,e.size*a);
+      eg.addColorStop(0,'rgba(255,200,50,'+a+')');eg.addColorStop(.4,ec+'99');eg.addColorStop(1,'rgba(255,50,50,0)');
+      cx.fillStyle=eg;cx.beginPath();cx.arc(e.x,e.y,e.size*a,0,7);cx.fill();cx.restore();
+    }
+  }
+
+  // ====== WOW EFFECTS DRAWING ======
+  // Mushroom clouds
+  for(const mc of G.mushroomClouds)drawMushroomCloud(mc);
+  // Shockwaves
+  for(const sw of G.shockwaves)drawShockwave(sw);
+  // EMP
+  for(const emp of G.empFlashes)drawEMP(emp);
+
+  // Particles + texts
+  for(const p of G.particles){const a=Math.max(0,p.life/p.max);cx.globalAlpha=a;cx.fillStyle=p.color;cx.fillRect(p.x-p.size/2,p.y-p.size/2,p.size,p.size)}
+  cx.globalAlpha=1;cx.textAlign='center';
+  for(const t of G.texts){const a=Math.max(0,t.life/t.max);cx.globalAlpha=a;cx.fillStyle=t.color;cx.font=`bold ${t.size||15}px Arial`;cx.fillText(t.text,t.x,t.y)}
+  cx.globalAlpha=1;cx.textAlign='left';
+
+  // CRT scanlines overlay
+  drawScanlines();
+
+  // Dramatic banner
+  drawBanner();
+}
+
+// ====== PLAYER BUILDING ======
+function canBuild(type,mx,my){
+  const spec=BLDS[type];if(!spec||G.money<spec.cost)return false;
+  const cp=MAP_POS[G.nation];if(Math.hypot(mx-cp.x*W,my-cp.y*H)>180)return false;
+  for(const b of G.buildings){if(Math.hypot(b.x-mx,b.y-my)<25)return false}
+  return true;
+}
+
+function build(type,mx,my){
+  if(!canBuild(type,mx,my)){
+    if(G.money<(BLDS[type]?.cost||0))addLog('Nicht genug Geld!','r');
+    else addLog('Zu weit weg! Baue näher am Kern.','r');
+    playAlert();return;
+  }
+  const spec=BLDS[type];G.money-=spec.cost;
+  G.buildings.push({type,x:mx,y:my,level:1,hp:100,maxHp:100,builtAt:Date.now()});
+  burst(mx,my,spec.color,20,1.2);floatText(mx,my-30,`${spec.label}!`,spec.color);
+  addLog(`🏗️ ${spec.label} gebaut! (-${spec.cost}$)`,'g');playBuild();
+  if(type==='milbase')G.mil+=3;
+  if(type==='defense')G.defense+=5;
+  if(type==='silo'){G.offense+=15;addLog('🚀 Raketen bereit!','p')}
+}
+
+// ====== PLAYER UPGRADE (U key) ======
+function upgradePlayerBuilding(mx,my){
+  // Find nearest player building within 30px
+  let closest=-1,closestDist=999;
+  for(let i=0;i<G.buildings.length;i++){
+    const b=G.buildings[i];
+    const d=Math.hypot(b.x-mx,b.y-my);
+    if(d<30&&d<closestDist&&b.level<3){closest=i;closestDist=d}
+  }
+  if(closest<0){addLog('Kein Gebäude in der Nähe zum Upgraden!','y');playAlert();return}
+  const b=G.buildings[closest];
+  const spec=BLDS[b.type];
+  const cost=Math.floor(spec.cost*b.level*0.8);
+  if(G.money<cost){addLog(`Nicht genug Geld! (${cost}$ nötig)`,'r');playAlert();return}
+  G.money-=cost;
+  b.level++;b.hp=100*b.level;b.maxHp=100*b.level;
+  burst(b.x,b.y,'#ffffff',15,1);
+  burst(b.x,b.y,spec.color,10,.8);
+  floatText(b.x,b.y-30,`⬆ Lvl ${b.level}!`,spec.color,18);
+  // WOW: upgrade shockwave
+  spawnShockwave(b.x,b.y,spec.color,60);
+  addLog(`⬆ ${spec.label} → Lvl ${b.level}! (-${cost}$)`,'g');
+  playBuild();
+}
+
+// ====== ATTACKS ======
+function launchAttack(fromKey){
+  const ai=G.ai[fromKey];const n=NATIONS[fromKey];
+  const strength=Math.floor((ai?ai.mil:n.mil*2)*(1+G.turn*.04)+rnd(5,15));
+  G.threats.push({from:fromKey,strength,timer:0,duration:3+Math.random()*2});
+  addLog(`${n.flag} ${n.name} greift an! Stärke: ${strength}`,'r');playSiren();G.shake=8;G.flash=1;G.flashColor='#ff345d';
+
+  // WOW: Show dramatic banner for big attacks
+  if(strength>40){showBanner(`⚔️ ANGRIFF! ${n.flag} ${n.name}!`,'#ff345d',2.5)}
+  else{showBanner(`${n.flag} greift an!`,'#ff345d',1.5)}
+
+  startAttackScene(fromKey,strength);
+}
+
+function startAttackScene(fromKey,strength){
+  const from=MAP_POS[fromKey],to=MAP_POS[G.nation];
+  const fx=from.x*W,fy=from.y*H,tx=to.x*W,ty=to.y*H;
+  const angle=Math.atan2(ty-fy,tx-fx),speed=200;
+  const missiles=[];const count=Math.min(8,Math.floor(strength/10)+1);
+  for(let i=0;i<count;i++){missiles.push({x:fx+rnd(-20,20),y:fy+rnd(-20,20),vx:Math.cos(angle)*speed+rnd(-20,20),vy:Math.sin(angle)*speed+rnd(-20,20),color:'#ff345d'})}
+  G.attackScene={missiles,explosions:[]};G.sceneTimer=4;
+  const timeToTarget=Math.hypot(tx-fx,ty-fy)/speed;
+
+  // WOW: Smoke at launch site
+  spawnSmoke(fx,fy,NATIONS[fromKey].color);
+
+  for(let i=0;i<count;i++){setTimeout(()=>{if(G.attackScene){
+    const ex=tx+rnd(-60,60),ey=ty+rnd(-60,60);
+    G.attackScene.explosions.push({x:ex,y:ey,life:1,max:1,size:rnd(30,80),color:'#ff345d'});
+    burst(ex,ey,'#ff345d',15,1.5);burst(ex,ey,'#ffb000',10);
+
+    // WOW: Mushroom cloud on big hits!
+    if(strength>30){spawnMushroom(ex,ey,'#ff345d',.8)}
+    else{playBoom(.4);spawnShockwave(ex,ey,'#ff345d',80)}
+
+    G.shake=Math.max(G.shake,12);G.flash=.8;G.flashColor='#ff345d';
+  }},(timeToTarget+i*.3)*1000)}
+  setTimeout(()=>resolveAttack(fromKey,strength),(timeToTarget+count*.3+.5)*1000);
+}
+
+function resolveAttack(fromKey,strength){
+  const n=NATIONS[fromKey];const ai=G.ai[fromKey];
+  const defPower=G.defense;const damage=Math.max(0,strength-defPower*1.5);
+  if(damage>0){
+    const moneyLoss=Math.floor(damage*8);const milLoss=Math.floor(damage*.3);
+    G.money-=moneyLoss;G.mil=Math.max(0,G.mil-milLoss);
+    addLog(`💥 ${n.flag} Angriff! -${moneyLoss}$ -${milLoss} Mil`,'r');
+    if(damage>20&&G.buildings.length>0){
+      const idx=Math.floor(Math.random()*G.buildings.length);
+      const b=G.buildings[idx];
+      addLog(`🏚️ ${BLDS[b.type].label} zerstört!`,'r');
+      // WOW: Building destruction effects
+      spawnMushroom(b.x,b.y,'#ff345d',.6);
+      G.buildings.splice(idx,1);
+    }
+    G.shake=15;G.flash=1;G.flashColor='#ff345d';playNuke(.6);
+    // WOW: Screen crack for heavy damage
+    if(damage>30)G.screenCrack={life:3};
+  }else{
+    addLog(`🛡️ ${n.flag} Angriff abgewehrt!`,'g');
+    G.hostility[fromKey]=Math.max(0,G.hostility[fromKey]-5);
+    playBuild();
+    // WOW: Defense successful banner!
+    showBanner('🛡️ ABGEWEHRT!','#00ff9d',1.5);
+    spawnShockwave(MAP_POS[G.nation].x*W,MAP_POS[G.nation].y*H,'#00ff9d',100);
+  }
+  if(G.offense>0&&damage>0){
+    const counter=Math.floor(G.offense*.8);
+    G.hostility[fromKey]=Math.min(100,G.hostility[fromKey]+counter*.3);
+    const pFrom=MAP_POS[G.nation],aTo=MAP_POS[fromKey];
+    const pfx=pFrom.x*W,pfy=pFrom.y*H,atx=aTo.x*W,aty=aTo.y*H;
+    const cAngle=Math.atan2(aty-pfy,atx-pfx),cSpeed=220;
+    const cCount=Math.min(4,Math.floor(G.offense/20)+1);
+    for(let i=0;i<cCount;i++){
+      setTimeout(()=>{
+        const m={x:pfx+rnd(-10,10),y:pfy+rnd(-10,10),vx:Math.cos(cAngle)*cSpeed+rnd(-10,10),vy:Math.sin(cAngle)*cSpeed+rnd(-10,10),color:'#a855f7',life:2.5,max:2.5};
+        G.aiMissiles.push(m);
+        spawnSmoke(pfx,pfy,'#a855f7');
+      },i*200);
+    }
+    const cTravelTime=Math.hypot(atx-pfx,aty-pfy)/cSpeed;
+    setTimeout(()=>{
+      if(ai&&ai.buildings.length>0){
+        const idx=Math.floor(Math.random()*ai.buildings.length);const b=ai.buildings[idx];
+        burst(b.x,b.y,'#a855f7',20,1.5);floatText(b.x,b.y-25,'ZERSTÖRT!','#a855f7',18);
+        spawnMushroom(b.x,b.y,'#a855f7',.7);
+        G.aiExplosions.push({x:b.x,y:b.y,life:1,max:1,size:rnd(25,50)});
+        addLog(`🚀 Gegenangriff zerstört ${n.flag} ${BLDS[b.type].label}!`,'p');ai.buildings.splice(idx,1);
+        if(b.type==='milbase')ai.mil=Math.max(0,ai.mil-3*b.level);
+        if(b.type==='defense')ai.defense=Math.max(0,ai.defense-5*b.level);
+        if(b.type==='silo')ai.offense=Math.max(0,ai.offense-15*b.level);
+      }
+      addLog(`🚀 Gegenangriff auf ${n.flag} ${n.name}!`,'p');playBoom(.3);
+    },(cTravelTime+0.5)*1000);
+  }
+}
+
+function counterAttack(targetKey){
+  if(G.offense<=0){addLog('Kein Raketensilo! Baue erst Raketensilos!','r');playAlert();return}
+  if(G.attackCooldown>0){addLog('Raketen laden nach...','y');playAlert();return}
+
+  const n=NATIONS[targetKey];const ai=G.ai[targetKey];
+  const pN=NATIONS[G.nation];
+
+  // BUG FIX: Attacking INCREASES hostility, not decreases!
+  G.hostility[targetKey]=Math.min(100,G.hostility[targetKey]+15);
+
+  const from=MAP_POS[G.nation],to=MAP_POS[targetKey];
+  const fx=from.x*W,fy=from.y*H,tx=to.x*W,ty=to.y*H;
+  const angle=Math.atan2(ty-fy,tx-fx),speed=250;
+
+  // Launch player missiles (PURPLE!)
+  const count=Math.min(6,Math.floor(G.offense/15)+1);
+  const missiles=[];
+  for(let i=0;i<count;i++){missiles.push({x:fx+rnd(-15,15),y:fy+rnd(-15,15),vx:Math.cos(angle)*speed+rnd(-15,15),vy:Math.sin(angle)*speed+rnd(-15,15),color:'#a855f7'})}
+  G.attackScene={missiles,explosions:[]};G.sceneTimer=4;
+  G.shake=8;G.flash=.6;G.flashColor='#a855f7';
+  addLog(`🚀 ${pN.flag} greift ${n.flag} ${n.name} an! ${count} Raketen!`,'p');
+  playSiren();
+
+  // WOW: Show dramatic attack banner
+  showBanner(`🚀 ${pN.flag} → ${n.flag} ${n.name}!`,'#a855f7',2);
+
+  // WOW: Smoke at launch site
+  spawnSmoke(fx,fy,'#a855f7');
+
+  // Consume some offense (cooldown mechanic)
+  G.attackCooldown=5; // 5 second cooldown between attacks
+
+  const timeToTarget=Math.hypot(tx-fx,ty-fy)/speed;
+  for(let i=0;i<count;i++){setTimeout(()=>{
+    if(G.attackScene){
+      const ex=tx+rnd(-50,50),ey=ty+rnd(-50,50);
+      G.attackScene.explosions.push({x:ex,y:ey,life:1,max:1,size:rnd(25,60),color:'#a855f7'});
+      burst(ex,ey,'#a855f7',15,1.5);burst(ex,ey,'#ffb000',10);
+      // WOW: Mushroom cloud on player attack!
+      spawnMushroom(ex,ey,'#a855f7',.9);
+      // WOW: EMP on impact
+      spawnEMP(ex,ey);
+      G.shake=Math.max(G.shake,10);G.flash=.7;G.flashColor='#a855f7';
+    }
+  },(timeToTarget+i*.25)*1000)}
+
+  // Resolve after missiles hit
+  setTimeout(()=>{
+    if(ai&&ai.buildings.length>0){
+      const idx=Math.floor(Math.random()*ai.buildings.length);const b=ai.buildings[idx];
+      burst(b.x,b.y,'#ff345d',20,1.5);floatText(b.x,b.y-25,'BOOM!','#ff345d',20);
+      // WOW: Mushroom cloud on destroyed building
+      spawnMushroom(b.x,b.y,'#a855f7',1);
+      addLog(`💥 ${BLDS[b.type].label} von ${n.flag} zerstört!`,'p');ai.buildings.splice(idx,1);
+      if(b.type==='milbase')ai.mil=Math.max(0,ai.mil-3*b.level);
+      if(b.type==='defense')ai.defense=Math.max(0,ai.defense-5*b.level);
+      if(b.type==='silo')ai.offense=Math.max(0,ai.offense-15*b.level);
+    }
+    addLog(`🚀 Angriff auf ${n.flag} ${n.name} abgeschlossen!`,'p');
+    playNuke(.5);
+    // Attacking makes target AND their allies angry!
+    G.hostility[targetKey]+=20;
+    const theirAllies=ALLY_MAP[targetKey]||[];
+    theirAllies.forEach(ally=>{
+      if(ally!==G.nation){G.hostility[ally]+=10;addLog(`😡 ${NATIONS[ally].flag} ist wütend über deinen Angriff! (+10)`,'y')}
+    });
+  },(timeToTarget+count*.25+.5)*1000);
+}
+
+// ====== AI vs AI COMBAT (visual!) ======
+function aiVsAiAttack(attackerKey,defenderKey){
+  const atkN=NATIONS[attackerKey],defN=NATIONS[defenderKey];
+  const atkAi=G.ai[attackerKey],defAi=G.ai[defenderKey];
+  if(!atkAi||!defAi)return;
+
+  const from=MAP_POS[attackerKey],to=MAP_POS[defenderKey];
+  const fx=from.x*W,fy=from.y*H,tx=to.x*W,ty=to.y*H;
+  const angle=Math.atan2(ty-fy,tx-fx);
+
+  const count=Math.min(4,Math.floor(atkAi.mil/15)+1);
+  for(let i=0;i<count;i++){
+    setTimeout(()=>{
+      const m={x:fx+rnd(-15,15),y:fy+rnd(-15,15),
+        vx:Math.cos(angle)*180+rnd(-15,15),vy:Math.sin(angle)*180+rnd(-15,15),
+        color:atkN.color,life:2.5,max:2.5};
+      G.aiMissiles.push(m);
+    },i*300);
+  }
+
+  const travelTime=Math.hypot(tx-fx,ty-fy)/180;
+  setTimeout(()=>{
+    const ex=tx+rnd(-40,40),ey=ty+rnd(-40,40);
+    G.aiExplosions.push({x:ex,y:ey,life:1.2,max:1.2,size:rnd(20,50)});
+    burst(ex,ey,defN.color,12,.8);burst(ex,ey,'#ffb000',8,.6);
+    // WOW: Small mushroom cloud for AI vs AI
+    spawnMushroom(ex,ey,atkN.color,.5);
+    spawnShockwave(ex,ey,atkN.color,60);
+
+    const atkPower=atkAi.mil*0.6;
+    const defPower=defAi.defense*1.2;
+    const dmg=Math.max(0,atkPower-defPower);
+    if(dmg>5&&defAi.buildings.length>0){
+      const idx=Math.floor(Math.random()*defAi.buildings.length);
+      const b=defAi.buildings[idx];
+      floatText(b.x,b.y-20,'💥',atkN.color);
+      defAi.buildings.splice(idx,1);
+      defAi.mil=Math.max(0,defAi.mil-dmg*0.3);
+      addLog(`⚔️ ${atkN.flag} vs ${defN.flag}: ${BLDS[b.type].label} zerstört!`,'y');
+    }else{
+      addLog(`⚔️ ${atkN.flag} vs ${defN.flag}: Angriff abgewehrt!`,'c');
+    }
+    playBoom(.15);
+  },(travelTime+0.5)*1000);
+}
+
+// ====== GAME LOGIC ======
+function updateGame(dt){
+  if(G.mode!=='playing')return;
+
+  // Slow motion
+  if(G.slowMo>0){G.slowMo-=dt;dt*=G.slowMoFactor;if(G.slowMo<=0)G.slowMoFactor=1}
+
+  G.turnTimer+=dt;
+
+  // Attack cooldown
+  if(G.attackCooldown>0)G.attackCooldown-=dt;
+
+  // Player income with level bonuses
+  const facs=G.buildings.filter(b=>b.type==='factory');
+  const facIncome=facs.reduce((s,b)=>s+15*b.level,0);
+  G.income=10+NATIONS[G.nation].eco*2+facIncome;G.money+=G.income*dt;
+  const labs=G.buildings.filter(b=>b.type==='lab');
+  const labTech=labs.reduce((s,b)=>s+2*b.level,0);
+  G.tech+=labTech*dt;
+  const mils=G.buildings.filter(b=>b.type==='milbase');
+  const milGrowth=mils.reduce((s,b)=>s+0.5*b.level,0);
+  G.mil+=(0.5+milGrowth)*dt;
+  const defs=G.buildings.filter(b=>b.type==='defense');
+  const defTotal=defs.reduce((s,b)=>s+5*b.level,0);
+  const silos=G.buildings.filter(b=>b.type==='silo');
+  const siloTotal=silos.reduce((s,b)=>s+15*b.level,0);
+  G.defense=NATIONS[G.nation].mil+defTotal;
+  G.offense=siloTotal;
+
+  // AI updates
+  for(const k of G.enemyNations){updateAI(k,dt)}
+
+  // Hostility – DYNAMIC!
+  for(const k of G.enemyNations){
+    const isAlly=G.allies.includes(k);
+    const baseInc=isAlly?.2:.8;
+    G.hostility[k]=Math.min(100,G.hostility[k]+baseInc*dt);
+  }
+  G.allies.forEach(a=>{G.hostility[a]=Math.max(0,G.hostility[a]-1.5*dt)});
+
+  // ALLY BETRAYAL – if hostility with ally goes too high, they turn enemy!
+  for(let i=G.allies.length-1;i>=0;i--){
+    const a=G.allies[i];
+    if(G.hostility[a]>75){
+      G.allies.splice(i,1);
+      addLog(`💔 ${NATIONS[a].flag} ${NATIONS[a].name} bricht das Bündnis!`,'r');
+      playSiren();G.shake=5;G.flash=.5;G.flashColor='#ff345d';
+      // WOW: Dramatic betrayal banner!
+      showBanner(`💔 VERRAT! ${NATIONS[a].flag} bricht Bündnis!`,'#ff345d',3);
+      // WOW: EMP on betrayal
+      spawnEMP(MAP_POS[a].x*W,MAP_POS[a].y*H);
+    }
+  }
+  // MAKE PEACE – if hostility with enemy drops low enough, they become ally!
+  for(const k of [...G.enemyNations]){
+    if(!G.allies.includes(k)&&G.hostility[k]<8){
+      G.allies.push(k);
+      addLog(`🤝 ${NATIONS[k].flag} ${NATIONS[k].name} ist jetzt VERBÜNDET!`,'g');
+      playBuild();G.flash=.3;G.flashColor='#00ff9d';
+      // WOW: Dramatic peace banner!
+      showBanner(`🤝 FRIEDEN! ${NATIONS[k].flag} verbündet!`,'#00ff9d',3);
+      spawnShockwave(MAP_POS[k].x*W,MAP_POS[k].y*H,'#00ff9d',120);
+    }
+  }
+
+  // Turn system
+  if(G.turnTimer>=G.turnLength){G.turnTimer=0;G.turn++;processTurn()}
+
+  // DEFCON update
+  G.defcon=calcDefcon();
+  updateDefconDisplay();
+
+  // Threats
+  for(let i=G.threats.length-1;i>=0;i--){G.threats[i].timer+=dt;if(G.threats[i].timer>=G.threats[i].duration){G.threats.splice(i,1)}}
+
+  // Attack scene
+  if(G.attackScene){G.sceneTimer-=dt;for(const m of G.attackScene.missiles||[]){m.x+=m.vx*dt;m.y+=m.vy*dt}
+    for(let i=(G.attackScene.explosions||[]).length-1;i>=0;i--){G.attackScene.explosions[i].life-=dt;if(G.attackScene.explosions[i].life<=0)G.attackScene.explosions.splice(i,1)}
+    if(G.sceneTimer<=0)G.attackScene=null}
+
+  // AI build animations
+  for(let i=G.aiBuildAnims.length-1;i>=0;i--){G.aiBuildAnims[i].timer+=dt;if(G.aiBuildAnims[i].timer>=G.aiBuildAnims[i].duration)G.aiBuildAnims.splice(i,1)}
+
+  // AI missiles
+  for(let i=G.aiMissiles.length-1;i>=0;i--){
+    const m=G.aiMissiles[i];m.x+=m.vx*dt;m.y+=m.vy*dt;m.life-=dt;
+    if(m.life<=0)G.aiMissiles.splice(i,1);
+  }
+  // AI explosions
+  for(let i=G.aiExplosions.length-1;i>=0;i--){
+    G.aiExplosions[i].life-=dt;if(G.aiExplosions[i].life<=0)G.aiExplosions.splice(i,1);
+  }
+
+  // WOW: Mushroom clouds
+  for(let i=G.mushroomClouds.length-1;i>=0;i--){
+    G.mushroomClouds[i].timer+=dt;
+    if(G.mushroomClouds[i].timer>=G.mushroomClouds[i].duration)G.mushroomClouds.splice(i,1);
+  }
+  // WOW: Shockwaves
+  for(let i=G.shockwaves.length-1;i>=0;i--){
+    const sw=G.shockwaves[i];
+    sw.radius+=sw.speed*dt;sw.life-=dt;
+    if(sw.life<=0||sw.radius>sw.maxRadius)G.shockwaves.splice(i,1);
+  }
+  // WOW: EMP
+  for(let i=G.empFlashes.length-1;i>=0;i--){
+    G.empFlashes[i].life-=dt;if(G.empFlashes[i].life<=0)G.empFlashes.splice(i,1);
+  }
+  // WOW: Smoke
+  for(let i=G.smokeTrails.length-1;i>=0;i--){
+    const s=G.smokeTrails[i];
+    s.x+=s.vx*dt;s.y+=s.vy*dt;s.vy-=30*dt;s.life-=dt;
+    if(s.life<=0)G.smokeTrails.splice(i,1);
+  }
+  // WOW: Banner
+  if(G.bannerTimer>0)G.bannerTimer-=dt;
+  // WOW: Screen crack
+  if(G.screenCrack){G.screenCrack.life-=dt;if(G.screenCrack.life<=0)G.screenCrack=null}
+
+  // Particles
+  for(let i=G.particles.length-1;i>=0;i--){const p=G.particles[i];p.x+=p.vx*dt;p.y+=p.vy*dt;p.vx*=.97;p.vy*=.97;p.life-=dt;if(p.life<=0)G.particles.splice(i,1)}
+  for(let i=G.texts.length-1;i>=0;i--){G.texts[i].y-=35*dt;G.texts[i].life-=dt;if(G.texts[i].life<=0)G.texts.splice(i,1)}
+
+  G.shake=Math.max(0,G.shake-25*dt);G.flash=Math.max(0,G.flash-2*dt);
+  if(G.money<-100){G.mode='gameover';addLog('💥 Nation zusammengebrochen!','r');showBanner('💀 NATION GEFALLEN!','#ff345d',5)}
+}
+
+function processTurn(){
+  addLog(`── Runde ${G.turn} ──`,'c');
+
+  // DIPLOMATIC EVENTS
+  if(G.allies.length>0&&Math.random()<.2){const ally=G.allies[Math.floor(Math.random()*G.allies.length)];const b=Math.floor(50+G.tech*2);G.money+=b;addLog(`${NATIONS[ally].flag} Handel: +${b}$`,'g')}
+
+  const eventRoll=Math.random();
+  if(eventRoll<.08){
+    if(G.allies.length>0){
+      const a=G.allies[Math.floor(Math.random()*G.allies.length)];
+      G.hostility[a]+=20;
+      addLog(`🕵️ Spionage-Skandal! ${NATIONS[a].flag} ist wütend! (+20 Feindseligkeit)`,'r');
+      showBanner(`🕵️ SPIONAGE! ${NATIONS[a].flag} entdeckt!`,'#ffb000',2);
+    }
+  }else if(eventRoll<.14){
+    const enemies=G.enemyNations.filter(k=>!G.allies.includes(k)&&G.hostility[k]>20);
+    if(enemies.length>0){
+      const e=enemies[Math.floor(Math.random()*enemies.length)];
+      G.hostility[e]=Math.max(0,G.hostility[e]-25);
+      addLog(`🕊️ ${NATIONS[e].flag} bietet Frieden an! (-25 Feindseligkeit)`,'g');
+      showBanner(`🕊️ Friedensangebot von ${NATIONS[e].flag}!`,'#00ff9d',2);
+    }
+  }else if(eventRoll<.18){
+    const all=G.enemyNations;
+    if(all.length>0){
+      const t=all[Math.floor(Math.random()*all.length)];
+      G.hostility[t]+=15;
+      addLog(`🗺️ Grenzstreit mit ${NATIONS[t].flag} ${NATIONS[t].name}! (+15)`,'y');
+    }
+  }else if(eventRoll<.22){
+    const all=G.enemyNations;
+    if(all.length>0){
+      const t=all[Math.floor(Math.random()*all.length)];
+      G.hostility[t]=Math.max(0,G.hostility[t]-10);
+      addLog(`🎭 Kulturaustausch mit ${NATIONS[t].flag}! (-10)`,'g');
+    }
+  }else if(eventRoll<.25){
+    if(G.allies.length>0){
+      const a=G.allies[Math.floor(Math.random()*G.allies.length)];
+      if(G.hostility[a]>40){
+        G.hostility[a]+=10;
+        addLog(`⚠️ ${NATIONS[a].flag} zweifelt am Bündnis! (${Math.floor(G.hostility[a])}/75 = Verrat)`,'y');
+      }
+    }
+  }
+
+  // AI attacks on player
+  for(const k of G.enemyNations){
+    if(G.allies.includes(k))continue;
+    const h=G.hostility[k];
+    if(h>60&&Math.random()<h/200)launchAttack(k);
+    if(h>80&&Math.random()<.3)launchAttack(k);
+  }
+
+  // AI vs AI conflicts
+  if(Math.random()<.15+G.turn*.01){
+    const nonPlayer=G.enemyNations;
+    if(nonPlayer.length>=2){
+      const a=nonPlayer[Math.floor(Math.random()*nonPlayer.length)];
+      const aAllies=ALLY_MAP[a]||[];
+      const possible=nonPlayer.filter(k=>k!==a&&!aAllies.includes(k));
+      if(possible.length>0){
+        const b=possible[Math.floor(Math.random()*possible.length)];
+        aiVsAiAttack(a,b);
+      }
+    }
+  }
+
+  // Intel reports
+  if(Math.random()<.3){
+    const randomNation=G.enemyNations[Math.floor(Math.random()*G.enemyNations.length)];
+    const ai=G.ai[randomNation];if(ai&&ai.buildings.length>0){
+      const n=NATIONS[randomNation];
+      const types={};ai.buildings.forEach(b=>{types[b.type]=(types[b.type]||0)+1});
+      const summary=Object.entries(types).map(([t,c])=>`${BLDS[t].label}×${c}`).join(', ');
+      addLog(`📡 ${n.flag} ${n.name}: ${summary} 💰${Math.floor(ai.money)}$`,'c');
+    }
+  }
+}
+
+// ====== HUD ======
+function drawHUD(){
+  const el=document.getElementById('hud');
+  if(G.mode==='menu'){el.innerHTML='<b style="color:#00d9ff">NEON COMMAND</b><br>Geopolitik';return}
+  const n=NATIONS[G.nation];const nt=Math.max(0,Math.ceil(G.turnLength-G.turnTimer));
+  const aiBldCount=G.enemyNations.reduce((s,k)=>s+(G.ai[k]?.buildings.length||0),0);
+  el.innerHTML=`<div style="font-size:13px;font-weight:900;color:${n.color}">${n.flag} ${n.name}</div>
+    <div>Geld <b style="color:#ffb000">${Math.floor(G.money)}$</b> <span style="color:#888">(+${Math.floor(G.income)}/s)</span></div>
+    <div>Mil <b style="color:#ef4444">${Math.floor(G.mil)}</b> · Def <b style="color:#22c55e">${Math.floor(G.defense)}</b> · Off <b style="color:#a855f7">${G.offense}</b></div>
+    <div>Tech <b style="color:#3b82f6">${Math.floor(G.tech)}</b></div><hr>
+    <div>Runde <b>${G.turn}</b> · Nächste in <b style="color:#00d9ff">${nt}s</b></div>
+    <div style="font-size:10px;color:#888">Deine Gebäude: ${G.buildings.length} | KI Gebäude: ${aiBldCount}</div>
+    ${G.attackMode?'<div style="font-size:12px;font-weight:900;color:#a855f7">🎯 ANGRIFFSMODUS – Klicke auf Feind!</div>':''}
+    ${G.diplomacyMode?'<div style="font-size:12px;font-weight:900;color:#00ff9d">🤝 DIPLOMATIE – Klicke auf Nation! (-20$)</div>':''}
+    ${G.attackCooldown>0?`<div style="font-size:10px;color:#ff345d">⏳ Raketen laden: ${Math.ceil(G.attackCooldown)}s</div>`:''}`;
+}
+
+function drawIntel(){
+  const el=document.getElementById('intel');
+  if(G.mode!=='playing'){el.innerHTML='';return}
+  let html='<div style="font-size:12px;font-weight:900;color:#7d5cff;margin-bottom:4px">📡 GEHEIMDIENST</div>';
+  for(const k of G.enemyNations){
+    const n=NATIONS[k];const ai=G.ai[k];const h=G.hostility[k];
+    if(!ai)continue;
+    const isAlly=G.allies.includes(k);
+    const hCol=isAlly?'#00ff9d':h>60?'#ff345d':h>30?'#ffb000':'#00ff9d';
+    const status=isAlly?'ALLY':h>60?'FEIND':h>30?'SPANNUNG':'FREUNDLICH';
+    const pIcon={aggressive:'⚔️',defensive:'🛡️',diplomatic:'🤝',expansive:'📈'}[ai.personality]||'';
+    const types={};ai.buildings.forEach(b=>{types[b.type]=(types[b.type]||0)+1});
+    const bldSummary=Object.entries(types).map(([t,c])=>`${BLDS[t].symbol}${c}`).join(' ');
+    const hBar='█'.repeat(Math.floor(h/10))+'░'.repeat(10-Math.floor(h/10));
+    html+=`<div style="margin:3px 0;border-bottom:1px solid rgba(125,92,255,.1);padding-bottom:2px">${n.flag} <span style="color:${hCol}">${status}</span> ${pIcon} <span style="font-size:8px;color:#888">${hBar}</span></div>`;
+    html+=`<div style="font-size:9px;color:#999;margin-bottom:3px">🏭${ai.buildings.length} ${bldSummary} | 💰${Math.floor(ai.money)}$</div>`;
+  }
+  el.innerHTML=html;
+}
+
+function drawBuildBar(){
+  const el=document.getElementById('buildbar');
+  if(G.mode!=='playing'){el.innerHTML='';return}
+  let html='';
+  for(const[k,s]of Object.entries(BLDS)){
+    const active=G.selected===k;const aff=G.money>=s.cost;
+    html+=`<div class="bb${active?' active':''}" style="opacity:${aff?1:.4}" onclick="selectBuild('${k}')"><div class="k">${s.key}</div><div class="n" style="color:${s.color}">${s.label}</div><div class="c">${s.cost}$</div></div>`;
+  }
+  html+=`<div class="bb" onclick="openDiplomacy()" style="border-color:#ff2bd6"><div class="k" style="color:#ff2bd6">D</div><div class="n" style="color:#ff2bd6">Diplomatie</div><div class="c">20$</div></div>`;
+  html+=`<div class="bb" onclick="doCounter()" style="border-color:#a855f7;opacity:${G.offense>0&&G.attackCooldown<=0?1:.4}"><div class="k" style="color:#a855f7">K</div><div class="n" style="color:#a855f7">Angriff</div><div class="c">${G.offense>0?Math.floor(G.offense/15)+' Raketen':'Baue Silo!'}</div></div>`;
+  html+=`<div class="bb" onclick="doUpgrade()" style="border-color:#fbbf24"><div class="k" style="color:#fbbf24">U</div><div class="n" style="color:#fbbf24">Upgrade</div><div class="c">Klick+U</div></div>`;
+  el.innerHTML=html;
+}
+
+window.selectBuild=function(k){G.selected=k;playAlert()};
+window.openDiplomacy=function(){
+  if(G.money<20){addLog('Nicht genug Geld! (20$ nötig)','r');playAlert();return}
+  if(G.diplomacyMode){G.diplomacyMode=false;addLog('Diplomatie abgebrochen','c');return}
+  G.diplomacyMode=true;G.attackMode=false;
+  addLog('🤝 Klicke auf eine Nation für Diplomatie! (-20$)','g');playAlert();
+};
+window.doCounter=function(){
+  if(G.offense<=0){addLog('Kein Raketensilo! Baue erst Silos!','r');playAlert();return}
+  if(G.attackCooldown>0){addLog('Raketen laden noch nach!','y');playAlert();return}
+  if(G.attackMode){G.attackMode=false;addLog('Angriff abgebrochen','c');return}
+  G.attackMode=true;G.diplomacyMode=false;
+  addLog('🎯 Klicke auf eine Nation zum Angreifen! (K=Abbruch)','p');playAlert();
+};
+window.doUpgrade=function(){
+  addLog('⬆ Klicke auf dein Gebäude zum Upgraden! (oder U+Klick)','y');playAlert();
+  G.selected='__upgrade';
+};
+
+// ====== GAME OVER ======
+function drawGameOver(){
+  cx.fillStyle='rgba(0,0,0,.8)';cx.fillRect(0,0,W,H);cx.textAlign='center';
+  // WOW: Glitch effect
+  const gx=Math.random()<.1?rnd(-5,5):0;
+  cx.save();cx.shadowColor='#ff345d';cx.shadowBlur=40;
+  cx.fillStyle='#ff345d';cx.font='900 56px Arial';cx.fillText('NATION GEFALLEN',W/2+gx,H/2-40);
+  cx.restore();
+  cx.fillStyle='#fff';cx.font='20px Arial';cx.fillText(`${NATIONS[G.nation].flag} ${NATIONS[G.nation].name} – Runde ${G.turn}`,W/2,H/2+10);
+  cx.fillStyle='#aaa';cx.font='16px Arial';cx.fillText('R = Neustart',W/2,H/2+50);cx.textAlign='left';
+}
+
+// ====== WOW: SCREEN CRACK EFFECT ======
+function drawScreenCrack(){
+  if(!G.screenCrack)return;
+  const alpha=Math.min(1,G.screenCrack.life/1);
+  cx.save();cx.globalAlpha=alpha*.4;cx.strokeStyle='#ff345d';cx.lineWidth=2;
+  // Draw random crack lines from center
+  const cx_=W/2,cy_=H/2;
+  for(let i=0;i<8;i++){
+    const angle=i*.785+rnd(-.2,.2);
+    cx.beginPath();cx.moveTo(cx_,cy_);
+    let lx=cx_,ly=cy_;
+    for(let s=0;s<5;s++){
+      lx+=Math.cos(angle+rnd(-.3,.3))*rnd(30,80);
+      ly+=Math.sin(angle+rnd(-.3,.3))*rnd(30,80);
+      cx.lineTo(lx,ly);
+    }
+    cx.stroke();
+  }
+  cx.restore();
+}
+
+// ====== MAIN DRAW ======
+function draw(){
+  cx.save();if(G.shake>0)cx.translate((Math.random()-.5)*G.shake,(Math.random()-.5)*G.shake);
+  if(G.mode==='menu')drawCountrySelect();
+  else if(G.mode==='playing')drawWorldMap();
+  else if(G.mode==='gameover'){drawWorldMap();drawGameOver()}
+  cx.restore();
+
+  // WOW: Screen crack overlay
+  drawScreenCrack();
+
+  // WOW: Red flash overlay for low DEFCON
+  if(G.defcon<=2&&G.mode==='playing'){
+    const pulse=Math.sin(Date.now()*.003)*.5+.5;
+    cx.save();cx.fillStyle=`rgba(255,0,0,${pulse*.08})`;cx.fillRect(0,0,W,H);cx.restore();
+  }
+
+  drawHUD();drawIntel();drawBuildBar();
+}
+
+// ====== INPUT ======
+cv.addEventListener('mousemove',e=>{G.mouseX=e.clientX;G.mouseY=e.clientY});
+cv.addEventListener('click',e=>{
+  initAudio();
+  if(G.mode==='menu'){
+    const keys=Object.keys(NATIONS);const cardW=150,cardH=190,gap=14;
+    const totalW=keys.length*cardW+(keys.length-1)*gap;const startX=(W-totalW)/2;const startY=H*.24;
+    keys.forEach((k,i)=>{const x=startX+i*(cardW+gap);if(e.clientX>x&&e.clientX<x+cardW&&e.clientY>startY&&e.clientY<startY+cardH)selectNation(k)});
+    return;
+  }
+  if(G.mode==='playing'){
+    // Upgrade mode
+    if(G.selected==='__upgrade'){
+      upgradePlayerBuilding(e.clientX,e.clientY);
+      G.selected='factory'; // Reset selection after upgrade
+      return;
+    }
+    // Check if diplomacy mode
+    if(G.diplomacyMode){
+      for(const k of G.enemyNations){
+        const pos=MAP_POS[k];const px=pos.x*W,py=pos.y*H;
+        if(Math.hypot(e.clientX-px,e.clientY-py)<40){
+          G.diplomacyMode=false;
+          if(k===G.nation){return}
+          G.money-=20;
+          const reduction=G.allies.includes(k)?8:18;
+          G.hostility[k]=Math.max(0,G.hostility[k]-reduction);
+          // WOW: Diplomacy visual effect
+          spawnShockwave(px,py,'#00ff9d',80);
+          if(G.allies.includes(k)){
+            addLog(`🤝 ${NATIONS[k].flag} Bündnis gestärkt! (-${reduction} Feindseligkeit)`,'g');
+          }else{
+            addLog(`🤝 ${NATIONS[k].flag} Beziehungen verbessert! (-${reduction} Feindseligkeit)`,'g');
+            if(G.hostility[k]<8&&!G.allies.includes(k)){
+              G.allies.push(k);
+              addLog(`🤝 ${NATIONS[k].flag} ${NATIONS[k].name} ist jetzt VERBÜNDET!`,'g');
+              showBanner(`🤝 FRIEDEN! ${NATIONS[k].flag} verbündet!`,'#00ff9d',3);
+              G.flash=.3;G.flashColor='#00ff9d';
+            }
+          }
+          playBuild();return;
+        }
+      }
+      addLog('Klicke auf eine Nation! (D=Abbruch)','y');return;
+    }
+    // Check if attack mode
+    if(G.attackMode){
+      for(const k of G.enemyNations){
+        const pos=MAP_POS[k];const px=pos.x*W,py=pos.y*H;
+        if(Math.hypot(e.clientX-px,e.clientY-py)<40){
+          if(G.allies.includes(k)){addLog(`${NATIONS[k].flag} Verbündete kannst du nicht angreifen!`,'y');G.attackMode=false;return}
+          G.attackMode=false;counterAttack(k);return;
+        }
+      }
+      addLog('Klicke auf einen Feind! (K=Abbruch)','y');return;
+    }
+    // Normal building
+    if(canBuild(G.selected,e.clientX,e.clientY))build(G.selected,e.clientX,e.clientY);
+  }
+});
+addEventListener('keydown',e=>{
+  initAudio();
+  if(e.key==='r'||e.key==='R'){
+    G={mode:'menu',nation:null,lastT:0,selected:'factory',mouseX:0,mouseY:0,shake:0,flash:0,flashColor:'',
+      money:0,income:0,mil:0,tech:0,defense:0,offense:0,buildings:[],
+      ai:{},hostility:{},allies:[],enemyNations:[],attackMode:false,diplomacyMode:false,
+      turn:0,turnTimer:0,turnLength:12,
+      particles:[],texts:[],threats:[],attackScene:null,sceneTimer:0,log:[],
+      aiBuildAnims:[],aiMissiles:[],aiExplosions:[],
+      shockwaves:[],mushroomClouds:[],banner:null,bannerTimer:0,defcon:5,
+      slowMo:0,slowMoFactor:1,empFlashes:[],smokeTrails:[],screenCrack:null,
+      scanlineOffset:0,attackCooldown:0};return}
+  if(G.mode!=='playing')return;
+  if(e.key==='1')G.selected='factory';if(e.key==='2')G.selected='milbase';if(e.key==='3')G.selected='lab';
+  if(e.key==='4')G.selected='defense';if(e.key==='5')G.selected='silo';
+  if(e.key==='d'||e.key==='D'){window.openDiplomacy();return}
+  if(e.key==='k'||e.key==='K'){window.doCounter();return}
+  if(e.key==='u'||e.key==='U'){window.doUpgrade();return}
+  playAlert();
+});
+
+// ====== LOOP ======
+function loop(t=0){const dt=Math.min(.033,(t-G.lastT)/1000||0);G.lastT=t;updateGame(dt);draw();requestAnimationFrame(loop)}
+loop();
+</script>
+</body>
 </html>
