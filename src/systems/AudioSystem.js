@@ -227,6 +227,79 @@ export function playVictory() {
   });
 }
 
+// ====== BOSS ABILITY SOUNDS ======
+
+// EMP blast: electric zap
+export function playBossEMP() {
+  const ctx = initAudio();
+  const t = ctx.currentTime;
+  // Electric buzz
+  const o = ctx.createOscillator(), g = ctx.createGain();
+  o.type = 'sawtooth';
+  o.frequency.setValueAtTime(3000, t);
+  o.frequency.exponentialRampToValueAtTime(80, t + 0.3);
+  g.gain.setValueAtTime(0.14, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+  o.connect(g); g.connect(ctx.destination);
+  o.start(); o.stop(t + 0.35);
+  // Static noise
+  const buf = ctx.createBuffer(1, ctx.sampleRate * 0.2, ctx.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-i / d.length * 3);
+  const n = ctx.createBufferSource(), ng = ctx.createGain();
+  n.buffer = buf;
+  ng.gain.setValueAtTime(0.1, t);
+  ng.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
+  n.connect(ng); ng.connect(ctx.destination);
+  n.start();
+}
+
+// Heal pulse: warm ascending tone
+export function playBossHeal() {
+  const ctx = initAudio();
+  const t = ctx.currentTime;
+  const notes = [400, 600, 800];
+  notes.forEach((freq, i) => {
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(freq, t + i * 0.08);
+    g.gain.setValueAtTime(0.06, t + i * 0.08);
+    g.gain.exponentialRampToValueAtTime(0.001, t + i * 0.08 + 0.2);
+    o.connect(g); g.connect(ctx.destination);
+    o.start(t + i * 0.08); o.stop(t + i * 0.08 + 0.2);
+  });
+}
+
+// Shield reflect hit: metallic ping
+export function playBossShieldHit() {
+  const ctx = initAudio();
+  const t = ctx.currentTime;
+  const o = ctx.createOscillator(), g = ctx.createGain();
+  o.type = 'triangle';
+  o.frequency.setValueAtTime(1800, t);
+  o.frequency.exponentialRampToValueAtTime(600, t + 0.15);
+  g.gain.setValueAtTime(0.1, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+  o.connect(g); g.connect(ctx.destination);
+  o.start(); o.stop(t + 0.2);
+}
+
+// Swarm spawn: bubbling burst
+export function playBossSwarmSpawn() {
+  const ctx = initAudio();
+  const t = ctx.currentTime;
+  for (let i = 0; i < 4; i++) {
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(200 + i * 150, t + i * 0.05);
+    o.frequency.exponentialRampToValueAtTime(100, t + i * 0.05 + 0.15);
+    g.gain.setValueAtTime(0.08, t + i * 0.05);
+    g.gain.exponentialRampToValueAtTime(0.001, t + i * 0.05 + 0.18);
+    o.connect(g); g.connect(ctx.destination);
+    o.start(t + i * 0.05); o.stop(t + i * 0.05 + 0.18);
+  }
+}
+
 // Game over: descending tones
 export function playGameOver() {
   const ctx = initAudio();

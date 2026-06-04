@@ -1,5 +1,6 @@
 import { burst } from './ParticleSystem.js';
 import { playBossWarning, playWaveStart } from './AudioSystem.js';
+import { BOSS_TYPES, getBossType } from './BossSystem.js';
 
 const ENEMY_TYPES = {
   scout: { hp: 35, speed: 62, size: 9, reward: 8, color: '#ff345d', energy: 4 },
@@ -17,11 +18,17 @@ export function spawnWave(state) {
   state.waveTimer = 0;
 
   if (isBoss) {
-    state.message = `BOSS WELLE ${state.wave}!`;
-    burst(state, state.core.x, state.core.y, '#ff2bd6', 40, 1.5);
+    const bossTypeKey = getBossType(state.wave);
+    const bossSpec = BOSS_TYPES[bossTypeKey];
+    state.currentBossType = bossTypeKey;
+    state.currentBossName = bossSpec.name;
+    state.message = `${bossSpec.name} – Welle ${state.wave}!`;
+    burst(state, state.core.x, state.core.y, bossSpec.color, 40, 1.5);
     state.shake = 12;
     playBossWarning();
   } else {
+    state.currentBossType = null;
+    state.currentBossName = null;
     state.message = `Welle ${state.wave}`;
     if (state.wave <= 2) state.message += ' – Baue Verteidigung!';
     playWaveStart();
@@ -75,7 +82,8 @@ function spawnSpecific(state, width, height, typeName) {
   else { x = Math.random() * width; y = height + 30; }
 
   const scale = 1 + (state.wave - 1) * 0.06;
-  state.enemies.push({
+
+  const enemy = {
     x, y,
     hp: spec.hp * scale,
     maxHp: spec.hp * scale,
@@ -85,5 +93,15 @@ function spawnSpecific(state, width, height, typeName) {
     color: spec.color,
     energy: spec.energy,
     isBoss: spec.isBoss || false,
-  });
+  };
+
+  // Assign boss type for boss enemies
+  if (spec.isBoss && state.currentBossType) {
+    const bossSpec = BOSS_TYPES[state.currentBossType];
+    enemy.bossType = state.currentBossType;
+    enemy.color = bossSpec.color;
+    enemy.abilityTimer = bossSpec.abilityCooldown || 999;
+  }
+
+  state.enemies.push(enemy);
 }

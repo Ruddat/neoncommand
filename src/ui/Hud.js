@@ -1,4 +1,5 @@
 import { BUILDINGS } from '../config/buildings.js';
+import { BOSS_TYPES } from '../systems/BossSystem.js';
 
 export class Hud {
   constructor(element) { this.el = element; }
@@ -16,6 +17,20 @@ export class Hud {
       ? `<span style="color:#ffb000">🔥 ${state.killStreak}x Combo!</span>`
       : '';
 
+    // Boss info
+    let bossInfo = '';
+    if (state.isBossWave && state.currentBossType) {
+      const bossSpec = BOSS_TYPES[state.currentBossType];
+      bossInfo = `<div style="color:${bossSpec.color};font-weight:900;font-size:13px">⚡ ${bossSpec.name} – ${bossSpec.description}</div>`;
+    }
+
+    // EMP warning
+    const empBuildings = state.buildings.filter(b => b.empUntil && b.empUntil > (state.gameTime || 0));
+    let empWarning = '';
+    if (empBuildings.length > 0) {
+      empWarning = `<div style="color:#ffb000;font-weight:bold;font-size:12px">⚡ ${empBuildings.length} Turm EMP-deaktiviert!</div>`;
+    }
+
     this.el.innerHTML = `
       <div style="font-size:14px;font-weight:900;color:#00d9ff;margin-bottom:4px">NEON COMMAND</div>
       <div>Welle <b>${state.wave}</b> · Kills <b>${state.kills}</b> · Score <b style="color:#ffb000">${state.score}</b></div>
@@ -24,6 +39,8 @@ export class Hud {
       <div>Core <b style="color:${coreHp > state.core.maxHp * .3 ? '#00ff9d' : '#ff345d'}">${coreHp}/${state.core.maxHp}</b></div>
       <div>Orbital <b style="color:#7d5cff">${orb > 0 ? orb + 's' : 'BEREIT [Q]'}</b></div>
       ${streak}
+      ${bossInfo}
+      ${empWarning}
     `;
   }
 }

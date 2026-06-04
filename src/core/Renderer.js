@@ -1,5 +1,6 @@
 import { TILE } from './constants.js';
 import { BUILDINGS } from '../config/buildings.js';
+import { BOSS_TYPES, isEmpDisabled } from '../systems/BossSystem.js';
 
 const C = {
   bg1: '#040714', bg2: '#03040a',
@@ -21,6 +22,7 @@ export class Renderer {
     this.drawCore(ctx, state);
     this.drawEnemies(ctx, state);
     this.drawProjectiles(ctx, state);
+    this.drawBossEffects(ctx, state);
     this.drawParticles(ctx, state);
     this.drawMsg(ctx, state, w);
 
@@ -51,29 +53,51 @@ export class Renderer {
   }
 
   drawBuildings(ctx, state) {
+    const gameTime = state.gameTime || 0;
     for (const b of state.buildings) {
       const spec = BUILDINGS[b.type]; if (!spec) continue;
       const range = spec.range * state.upgRange;
-      ctx.save(); ctx.shadowColor = spec.color; ctx.shadowBlur = 16; ctx.fillStyle = spec.color;
+      const empOff = isEmpDisabled(b, gameTime);
+
+      ctx.save();
+      if (empOff) {
+        // EMP-disabled: dim + flicker
+        ctx.globalAlpha = 0.3 + Math.sin(Date.now() * 0.02) * 0.15;
+        ctx.shadowColor = '#ff345d';
+        ctx.shadowBlur = 10;
+        ctx.fillStyle = '#555';
+      } else {
+        ctx.shadowColor = spec.color;
+        ctx.shadowBlur = 16;
+        ctx.fillStyle = spec.color;
+      }
 
       if (b.type === 'generator') {
         ctx.beginPath(); ctx.moveTo(b.x, b.y - 17); ctx.lineTo(b.x + 15, b.y); ctx.lineTo(b.x, b.y + 17); ctx.lineTo(b.x - 15, b.y); ctx.closePath(); ctx.fill();
-        ctx.fillStyle = 'rgba(0,255,157,.25)'; const p = 1 + Math.sin(Date.now() * .004 + b.x) * .4;
-        ctx.beginPath(); ctx.arc(b.x, b.y, 7 * p, 0, 7); ctx.fill();
+        if (!empOff) { ctx.fillStyle = 'rgba(0,255,157,.25)'; const p = 1 + Math.sin(Date.now() * .004 + b.x) * .4; ctx.beginPath(); ctx.arc(b.x, b.y, 7 * p, 0, 7); ctx.fill(); }
       } else if (b.type === 'shield') {
-        ctx.globalAlpha = .2; ctx.beginPath(); ctx.arc(b.x, b.y, TILE * .75, 0, 7); ctx.fill();
-        ctx.globalAlpha = .7; ctx.strokeStyle = spec.color; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(b.x, b.y, TILE * .75, 0, 7); ctx.stroke();
-        ctx.globalAlpha = 1; ctx.fillStyle = C.white; ctx.font = 'bold 13px Arial'; ctx.textAlign = 'center'; ctx.fillText('S', b.x, b.y + 5); ctx.textAlign = 'left';
+        ctx.globalAlpha = empOff ? 0.15 : .2; ctx.beginPath(); ctx.arc(b.x, b.y, TILE * .75, 0, 7); ctx.fill();
+        ctx.globalAlpha = empOff ? 0.3 : .7; ctx.strokeStyle = empOff ? '#555' : spec.color; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(b.x, b.y, TILE * .75, 0, 7); ctx.stroke();
+        ctx.globalAlpha = empOff ? 0.3 : 1; ctx.fillStyle = empOff ? '#555' : C.white; ctx.font = 'bold 13px Arial'; ctx.textAlign = 'center'; ctx.fillText('S', b.x, b.y + 5); ctx.textAlign = 'left';
       } else if (b.type === 'sniper') {
         ctx.beginPath(); ctx.moveTo(b.x, b.y - 17); ctx.lineTo(b.x + 15, b.y + 11); ctx.lineTo(b.x - 15, b.y + 11); ctx.closePath(); ctx.fill();
       } else if (b.type === 'missile') {
-        ctx.fillRect(b.x - 10, b.y - 10, 20, 20); ctx.strokeStyle = spec.color; ctx.lineWidth = 2; ctx.strokeRect(b.x - 10, b.y - 10, 20, 20);
+        ctx.fillRect(b.x - 10, b.y - 10, 20, 20); ctx.strokeStyle = empOff ? '#555' : spec.color; ctx.lineWidth = 2; ctx.strokeRect(b.x - 10, b.y - 10, 20, 20);
       } else {
         ctx.beginPath(); ctx.arc(b.x, b.y, 13, 0, 7); ctx.fill();
       }
+
+      // EMP disabled icon
+      if (empOff) {
+        ctx.globalAlpha = 0.7 + Math.sin(Date.now() * 0.01) * 0.3;
+        ctx.strokeStyle = C.red; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(b.x, b.y, 18, 0, 7); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(b.x - 8, b.y - 8); ctx.lineTo(b.x + 8, b.y + 8); ctx.stroke();
+      }
+
       ctx.restore();
 
-      if (spec.range > 0) { ctx.save(); ctx.strokeStyle = spec.color; ctx.globalAlpha = .05; ctx.beginPath(); ctx.arc(b.x, b.y, range, 0, 7); ctx.stroke(); ctx.restore(); }
+      if (spec.range > 0 && !empOff) { ctx.save(); ctx.strokeStyle = spec.color; ctx.globalAlpha = .05; ctx.beginPath(); ctx.arc(b.x, b.y, range, 0, 7); ctx.stroke(); ctx.restore(); }
       const maxHp = b.maxHp || (b.type === 'shield' ? 220 : b.type === 'generator' ? 80 : 100);
       if (b.hp < maxHp) this.drawBar(ctx, b.x - 18, b.y - 24, 36, 4, b.hp / maxHp, spec.color);
     }
@@ -81,28 +105,174 @@ export class Renderer {
 
   drawEnemies(ctx, state) {
     for (const e of state.enemies) {
-      ctx.save(); ctx.shadowColor = e.color; ctx.shadowBlur = e.isBoss ? 28 : 14; ctx.fillStyle = e.color;
+      ctx.save();
+      const bossSpec = e.isBoss && e.bossType ? BOSS_TYPES[e.bossType] : null;
+      const color = bossSpec ? bossSpec.color : e.color;
+
+      ctx.shadowColor = color;
+      ctx.shadowBlur = e.isBoss ? 28 : 14;
+      ctx.fillStyle = color;
+
       if (e.isBoss) {
+        // Boss: 8-pointed star
         ctx.beginPath();
-        for (let i = 0; i < 8; i++) { const a = i / 8 * 7.28 - .4; const r = e.size + Math.sin(Date.now() * .005) * 4; ctx.lineTo(e.x + Math.cos(a) * r, e.y + Math.sin(a) * r); }
+        const points = bossSpec ? 12 : 8; // more points for special bosses
+        for (let i = 0; i < points; i++) {
+          const a = i / points * Math.PI * 2 - .4;
+          const r = e.size + Math.sin(Date.now() * .005 + i) * 4;
+          const inner = i % 2 === 0 ? r : r * 0.7;
+          ctx.lineTo(e.x + Math.cos(a) * inner, e.y + Math.sin(a) * inner);
+        }
         ctx.closePath(); ctx.fill();
+
+        // Boss aura
+        if (bossSpec) {
+          ctx.globalAlpha = 0.15 + Math.sin(Date.now() * .003) * 0.08;
+          ctx.fillStyle = bossSpec.auraColor;
+          ctx.beginPath();
+          ctx.arc(e.x, e.y, e.size + 20 + Math.sin(Date.now() * .004) * 8, 0, 7);
+          ctx.fill();
+          ctx.globalAlpha = 1;
+
+          // Boss type indicator icon
+          ctx.fillStyle = C.white;
+          ctx.font = 'bold 14px Arial';
+          ctx.textAlign = 'center';
+          if (e.bossType === 'emp') ctx.fillText('⚡', e.x, e.y + 5);
+          else if (e.bossType === 'swarm') ctx.fillText('◎', e.x, e.y + 5);
+          else if (e.bossType === 'heal') ctx.fillText('+', e.x, e.y + 5);
+          else if (e.bossType === 'shield') ctx.fillText('◆', e.x, e.y + 5);
+          ctx.textAlign = 'left';
+        }
+      } else if (e.isSwarmMinion) {
+        // Swarm minion: small diamond
+        ctx.beginPath();
+        ctx.moveTo(e.x, e.y - e.size);
+        ctx.lineTo(e.x + e.size, e.y);
+        ctx.lineTo(e.x, e.y + e.size);
+        ctx.lineTo(e.x - e.size, e.y);
+        ctx.closePath();
+        ctx.fill();
       } else {
+        // Regular enemy: hexagon
         ctx.beginPath();
         for (let i = 0; i < 6; i++) { const a = i / 6 * 6.28 - .5; ctx.lineTo(e.x + Math.cos(a) * e.size, e.y + Math.sin(a) * e.size); }
         ctx.closePath(); ctx.fill();
       }
       ctx.restore();
-      if (e.hp < e.maxHp) this.drawBar(ctx, e.x - (e.isBoss ? 26 : 16), e.y - e.size - 10, e.isBoss ? 52 : 32, e.isBoss ? 6 : 4, e.hp / e.maxHp, e.hp > e.maxHp * .3 ? C.white : C.red);
+
+      // HP bar
+      if (e.hp < e.maxHp) {
+        const barW = e.isBoss ? 52 : e.isSwarmMinion ? 20 : 32;
+        const barH = e.isBoss ? 6 : 4;
+        this.drawBar(ctx, e.x - barW / 2, e.y - e.size - 10, barW, barH, e.hp / e.maxHp, e.hp > e.maxHp * .3 ? C.white : C.red);
+      }
+
+      // Boss type label
+      if (e.isBoss && bossSpec) {
+        ctx.save();
+        ctx.fillStyle = C.white;
+        ctx.font = 'bold 10px Arial';
+        ctx.textAlign = 'center';
+        ctx.globalAlpha = 0.8;
+        ctx.fillText(bossSpec.name.toUpperCase(), e.x, e.y - e.size - 18);
+        ctx.restore();
+      }
     }
   }
 
   drawProjectiles(ctx, state) {
     for (const p of state.projectiles) {
+      // Enemy projectiles (reflected)
+      if (p.isEnemyProjectile) {
+        ctx.save();
+        ctx.shadowColor = p.color; ctx.shadowBlur = 18;
+        ctx.fillStyle = p.color;
+        ctx.beginPath(); ctx.arc(p.x, p.y, 5, 0, 7); ctx.fill();
+        // Trail
+        if (p.trail.length > 1) {
+          ctx.strokeStyle = p.color; ctx.globalAlpha = .3; ctx.lineWidth = 2;
+          ctx.beginPath();
+          p.trail.forEach((t, i) => i ? ctx.lineTo(t.x, t.y) : ctx.moveTo(t.x, t.y));
+          ctx.lineTo(p.x, p.y);
+          ctx.stroke();
+        }
+        ctx.restore();
+        continue;
+      }
+
       if (p.trail.length > 1) { ctx.save(); ctx.strokeStyle = p.color; ctx.globalAlpha = .3; ctx.lineWidth = 2; ctx.beginPath(); p.trail.forEach((t, i) => i ? ctx.lineTo(t.x, t.y) : ctx.moveTo(t.x, t.y)); ctx.lineTo(p.x, p.y); ctx.stroke(); ctx.restore(); }
       ctx.save(); ctx.shadowColor = p.color; ctx.shadowBlur = p.type === 'sniper' ? 20 : 12; ctx.fillStyle = p.color;
       if (p.type === 'sniper') { ctx.strokeStyle = p.color; ctx.lineWidth = 2.5; const a = Math.atan2(p.vy, p.vx); ctx.beginPath(); ctx.moveTo(p.x - Math.cos(a) * 20, p.y - Math.sin(a) * 20); ctx.lineTo(p.x + Math.cos(a) * 10, p.y + Math.sin(a) * 10); ctx.stroke(); }
       else { const sz = p.type === 'missile' ? 5 : 3; ctx.beginPath(); ctx.arc(p.x, p.y, sz, 0, 7); ctx.fill(); }
       ctx.restore();
+    }
+  }
+
+  // Boss visual effects (EMP rings, heal pulses)
+  drawBossEffects(ctx, state) {
+    // EMP rings
+    if (state.empRings) {
+      for (const r of state.empRings) {
+        const alpha = r.life / r.max;
+        ctx.save();
+        ctx.strokeStyle = r.color;
+        ctx.globalAlpha = alpha * 0.6;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(r.x, r.y, r.radius, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Inner fill
+        ctx.globalAlpha = alpha * 0.08;
+        ctx.fillStyle = r.color;
+        ctx.beginPath();
+        ctx.arc(r.x, r.y, r.radius, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Lightning streaks
+        if (alpha > 0.4) {
+          ctx.globalAlpha = alpha * 0.5;
+          ctx.strokeStyle = C.white;
+          ctx.lineWidth = 1;
+          for (let i = 0; i < 6; i++) {
+            const angle = (i / 6) * Math.PI * 2 + Date.now() * 0.001;
+            ctx.beginPath();
+            ctx.moveTo(r.x + Math.cos(angle) * 10, r.y + Math.sin(angle) * 10);
+            let cx = r.x + Math.cos(angle) * r.radius * 0.5;
+            let cy = r.y + Math.sin(angle) * r.radius * 0.5;
+            cx += (Math.random() - 0.5) * 30;
+            cy += (Math.random() - 0.5) * 30;
+            ctx.lineTo(cx, cy);
+            const ex = r.x + Math.cos(angle) * r.radius;
+            const ey = r.y + Math.sin(angle) * r.radius;
+            ctx.lineTo(ex, ey);
+            ctx.stroke();
+          }
+        }
+        ctx.restore();
+      }
+    }
+
+    // Heal pulses
+    if (state.healPulses) {
+      for (const p of state.healPulses) {
+        const alpha = p.life / p.max;
+        ctx.save();
+        ctx.strokeStyle = p.color;
+        ctx.globalAlpha = alpha * 0.5;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Green cross glow at center
+        ctx.globalAlpha = alpha * 0.3;
+        ctx.fillStyle = p.color;
+        ctx.fillRect(p.x - 4, p.y - 12, 8, 24);
+        ctx.fillRect(p.x - 12, p.y - 4, 24, 8);
+        ctx.restore();
+      }
     }
   }
 
@@ -131,9 +301,10 @@ export class Renderer {
   drawMsg(ctx, state, w) {
     if (!state.message || state.msgTimer <= 0) return;
     const a = Math.min(1, state.msgTimer);
+    const bossColor = state.currentBossType ? (BOSS_TYPES[state.currentBossType]?.color || C.pink) : C.pink;
     ctx.save(); ctx.globalAlpha = a; ctx.textAlign = 'center';
     ctx.fillStyle = 'rgba(0,0,0,.7)'; ctx.fillRect(w / 2 - 250, 78, 500, 52);
-    ctx.strokeStyle = state.isBossWave ? C.pink : C.cyan; ctx.lineWidth = 1.5; ctx.strokeRect(w / 2 - 250, 78, 500, 52);
+    ctx.strokeStyle = state.isBossWave ? bossColor : C.cyan; ctx.lineWidth = state.isBossWave ? 2 : 1.5; ctx.strokeRect(w / 2 - 250, 78, 500, 52);
     ctx.fillStyle = C.white; ctx.font = '900 22px Arial'; ctx.fillText(state.message, w / 2, 112);
     ctx.textAlign = 'left'; ctx.restore();
   }
@@ -141,15 +312,20 @@ export class Renderer {
   drawMenu(ctx, state, w, h) {
     ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(0, 0, w, h);
     ctx.textAlign = 'center';
-    ctx.fillStyle = C.cyan; ctx.font = '900 80px Arial'; ctx.fillText('NEON', w / 2, h / 2 - 110);
-    ctx.fillStyle = C.pink; ctx.font = '900 60px Arial'; ctx.fillText('COMMAND', w / 2, h / 2 - 40);
-    ctx.fillStyle = C.green; ctx.font = '17px Arial'; ctx.fillText('Tower Defense – Mehr Spaß Edition', w / 2, h / 2 + 5);
+    ctx.fillStyle = C.cyan; ctx.font = '900 80px Arial'; ctx.fillText('NEON', w / 2, h / 2 - 120);
+    ctx.fillStyle = C.pink; ctx.font = '900 60px Arial'; ctx.fillText('COMMAND', w / 2, h / 2 - 50);
+    ctx.fillStyle = C.green; ctx.font = '17px Arial'; ctx.fillText('Tower Defense – Boss Edition', w / 2, h / 2 - 5);
+
+    // Boss type preview
+    ctx.fillStyle = '#aaa'; ctx.font = '13px Arial';
+    ctx.fillText('4 Boss-Typen: EMP ⚡ · Swarm ◎ · Heal + · Shield ◆', w / 2, h / 2 + 25);
+
     ctx.fillStyle = C.white; ctx.font = '14px Arial';
-    ctx.fillText('Klick = Bauen · 1-5 = Gebäudetyp · Q = Orbital Strike', w / 2, h / 2 + 40);
-    ctx.fillText('U = Upgrades · Leertaste = Pause · R = Neustart', w / 2, h / 2 + 65);
+    ctx.fillText('Klick = Bauen · 1-5 = Gebäudetyp · Q = Orbital Strike', w / 2, h / 2 + 55);
+    ctx.fillText('U = Upgrades · Leertaste = Pause · R = Neustart', w / 2, h / 2 + 80);
     ctx.fillStyle = C.yellow; ctx.font = '13px Arial';
-    ctx.fillText('Tipp: Baue erst Generatoren, dann Laser!', w / 2, h / 2 + 95);
-    ctx.fillStyle = C.cyan; ctx.font = '900 22px Arial'; ctx.fillText('Enter = Start', w / 2, h / 2 + 135);
+    ctx.fillText('Tipp: Baue erst Generatoren, dann Laser!', w / 2, h / 2 + 110);
+    ctx.fillStyle = C.cyan; ctx.font = '900 22px Arial'; ctx.fillText('Enter = Start', w / 2, h / 2 + 150);
     ctx.textAlign = 'left';
   }
 

@@ -1,10 +1,19 @@
 import { BUILDINGS } from '../config/buildings.js';
 import { TILE } from '../core/constants.js';
-import { burst } from './ParticleSystem.js';
-import { playLaser, playMissileLaunch, playExplosion, playSniper, playEnemyKill, playCoreDamage, playBuildingDestroyed } from './AudioSystem.js';
+import { burst, floatText } from './ParticleSystem.js';
+import {
+  playLaser, playMissileLaunch, playExplosion, playSniper,
+  playEnemyKill, playCoreDamage, playBuildingDestroyed,
+} from './AudioSystem.js';
+import {
+  isEmpDisabled, spawnSwarmMinions, reflectDamage, BOSS_TYPES,
+} from './BossSystem.js';
 
 export function updateCombat(state, dt) {
   const { buildings, enemies, projectiles, core } = state;
+
+  // Track game time for EMP
+  state.gameTime = (state.gameTime || 0) + dt;
 
   // Shield healing
   for (const b of buildings) {
@@ -20,6 +29,10 @@ export function updateCombat(state, dt) {
   // Turrets fire
   for (const building of buildings) {
     if (building.type === 'generator' || building.type === 'shield') continue;
+
+    // EMP check — skip firing if disabled
+    if (isEmpDisabled(building, state.gameTime)) continue;
+
     const spec = BUILDINGS[building.type];
     if (!spec || spec.range === 0) continue;
 
@@ -44,7 +57,6 @@ export function updateCombat(state, dt) {
         dmg, color: spec.color, type: building.type,
         life: 3, splash: spec.splash || 0, trail: [],
       });
-      // Audio feedback for turret firing
       if (building.type === 'laser') playLaser();
       else if (building.type === 'missile') playMissileLaunch();
       else if (building.type === 'sniper') playSniper();
@@ -62,11 +74,48 @@ export function updateCombat(state, dt) {
       projectiles.splice(i, 1); continue;
     }
 
+    // === ENEMY PROJECTILES (reflected by Shield Boss) ===
+    if (p.isEnemyProjectile) {
+      // Check hit on buildings
+      for (let j = buildings.length - 1; j >= 0; j--) {
+        const b = buildings[j];
+        const d = Math.hypot(p.x - b.x, p.y - b.y);
+        if (d < TILE * 0.5) {
+          b.hp -= p.dmg;
+          burst(state, p.x, p.y, p.color, 6);
+          if (b.hp <= 0) {
+            burst(state, b.x, b.y, '#ff345d', 30);
+            playBuildingDestroyed();
+            buildings.splice(j, 1);
+          }
+          projectiles.splice(i, 1);
+          break;
+        }
+      }
+      // Check hit on core
+      const cd = Math.hypot(p.x - core.x, p.y - core.y);
+      if (cd < 24) {
+        core.hp -= p.dmg;
+        burst(state, core.x, core.y, p.color, 8);
+        state.shake = Math.max(state.shake, 5);
+        projectiles.splice(i, 1);
+      }
+      continue;
+    }
+
+    // === PLAYER PROJECTILES ===
     let hit = false;
     for (const enemy of enemies) {
       const d = Math.hypot(p.x - enemy.x, p.y - enemy.y);
       if (d < enemy.size + 8) {
-        enemy.hp -= p.dmg;
+        const damage = p.dmg;
+
+        // Shield Boss: reflect a portion of damage
+        if (enemy.isBoss && enemy.bossType === 'shield') {
+          reflectDamage(state, enemy, damage, p.x, p.y);
+        }
+
+        enemy.hp -= damage;
         burst(state, p.x, p.y, p.color, 6);
         playExplosion(0.05);
 
@@ -122,6 +171,11 @@ export function updateCombat(state, dt) {
     }
 
     if (enemy.hp <= 0) {
+      // Swarm Boss: spawn minions on death
+      if (enemy.isBoss && enemy.bossType === 'swarm') {
+        spawnSwarmMinions(state, enemy);
+      }
+
       state.kills++;
       state.score += enemy.reward;
       state.energy += enemy.energy || 5;
@@ -138,7 +192,12 @@ export function updateCombat(state, dt) {
 
       burst(state, enemy.x, enemy.y, enemy.color, enemy.isBoss ? 50 : 18, enemy.isBoss ? 1.8 : 1);
       playEnemyKill();
-      if (enemy.isBoss) { state.shake = 15; burst(state, enemy.x, enemy.y, '#fff', 60, 2); playExplosion(0.2); }
+      if (enemy.isBoss) {
+        state.shake = 15;
+        burst(state, enemy.x, enemy.y, '#fff', 60, 2);
+        playExplosion(0.2);
+        floatText(state, enemy.x, enemy.y - 40, 'BOSS VERNICHTET!', '#fff');
+      }
       enemies.splice(i, 1);
     }
   }

@@ -5,6 +5,7 @@ import { Hud } from '../ui/Hud.js';
 import { updateResources } from '../systems/ResourceSystem.js';
 import { updateWaves, spawnWave } from '../systems/WaveSystem.js';
 import { updateCombat, orbitalStrike } from '../systems/CombatSystem.js';
+import { updateBossAbilities, updateBossEffects } from '../systems/BossSystem.js';
 import { updateParticles, burst } from '../systems/ParticleSystem.js';
 import { playBuild, playOrbital, playUpgrade, playVictory, playGameOver } from '../systems/AudioSystem.js';
 
@@ -71,6 +72,12 @@ export class Game {
       shake: 0,
       // Win condition
       winWave: 30,
+      // Boss system
+      gameTime: 0,
+      currentBossType: null,
+      currentBossName: null,
+      empRings: [],
+      healPulses: [],
     };
   }
 
@@ -192,6 +199,8 @@ export class Game {
     updateResources(this.state, dt);
     updateWaves(this.state, this.width, this.height, dt);
     updateCombat(this.state, dt);
+    updateBossAbilities(this.state, dt);
+    updateBossEffects(this.state, dt);
     updateParticles(this.state, dt);
 
     if (this.state.killStreak > (this.state.bestStreak || 0)) this.state.bestStreak = this.state.killStreak;
