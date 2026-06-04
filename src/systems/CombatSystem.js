@@ -1,6 +1,7 @@
 import { BUILDINGS } from '../config/buildings.js';
 import { TILE } from '../core/constants.js';
 import { burst } from './ParticleSystem.js';
+import { playLaser, playMissileLaunch, playExplosion, playSniper, playEnemyKill, playCoreDamage, playBuildingDestroyed } from './AudioSystem.js';
 
 export function updateCombat(state, dt) {
   const { buildings, enemies, projectiles, core } = state;
@@ -43,6 +44,10 @@ export function updateCombat(state, dt) {
         dmg, color: spec.color, type: building.type,
         life: 3, splash: spec.splash || 0, trail: [],
       });
+      // Audio feedback for turret firing
+      if (building.type === 'laser') playLaser();
+      else if (building.type === 'missile') playMissileLaunch();
+      else if (building.type === 'sniper') playSniper();
     }
   }
 
@@ -63,6 +68,7 @@ export function updateCombat(state, dt) {
       if (d < enemy.size + 8) {
         enemy.hp -= p.dmg;
         burst(state, p.x, p.y, p.color, 6);
+        playExplosion(0.05);
 
         if (p.type === 'sniper') {
           const a = Math.atan2(enemy.y - p.y, enemy.x - p.x);
@@ -79,6 +85,7 @@ export function updateCombat(state, dt) {
             }
           }
           burst(state, p.x, p.y, p.color, 24, 1.3);
+          playExplosion(0.12);
           state.shake = Math.max(state.shake, 5);
         }
 
@@ -99,6 +106,7 @@ export function updateCombat(state, dt) {
     if (d < TILE * 0.7) {
       core.hp -= (enemy.isBoss ? 18 : 10) * dt;
       burst(state, core.x, core.y, '#ff345d', 2);
+      playCoreDamage();
       state.shake = Math.max(state.shake, 3);
     }
 
@@ -109,7 +117,7 @@ export function updateCombat(state, dt) {
       if (bd < cr) {
         b.hp -= (enemy.isBoss ? 16 : 6) * dt;
         if (b.type === 'shield') { enemy.hp -= 6 * dt; enemy.speed = Math.max(8, enemy.speed * 0.97); }
-        if (b.hp <= 0) { burst(state, b.x, b.y, '#ff345d', 30); buildings.splice(j, 1); }
+        if (b.hp <= 0) { burst(state, b.x, b.y, '#ff345d', 30); playBuildingDestroyed(); buildings.splice(j, 1); }
       }
     }
 
@@ -129,7 +137,8 @@ export function updateCombat(state, dt) {
       }
 
       burst(state, enemy.x, enemy.y, enemy.color, enemy.isBoss ? 50 : 18, enemy.isBoss ? 1.8 : 1);
-      if (enemy.isBoss) { state.shake = 15; burst(state, enemy.x, enemy.y, '#fff', 60, 2); }
+      playEnemyKill();
+      if (enemy.isBoss) { state.shake = 15; burst(state, enemy.x, enemy.y, '#fff', 60, 2); playExplosion(0.2); }
       enemies.splice(i, 1);
     }
   }

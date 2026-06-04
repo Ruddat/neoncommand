@@ -6,6 +6,7 @@ import { updateResources } from '../systems/ResourceSystem.js';
 import { updateWaves, spawnWave } from '../systems/WaveSystem.js';
 import { updateCombat, orbitalStrike } from '../systems/CombatSystem.js';
 import { updateParticles, burst } from '../systems/ParticleSystem.js';
+import { playBuild, playOrbital, playUpgrade, playVictory, playGameOver } from '../systems/AudioSystem.js';
 
 export class Game {
   constructor(canvas, hudElement) {
@@ -68,6 +69,8 @@ export class Game {
       upgChoices: [],
       // Effects
       shake: 0,
+      // Win condition
+      winWave: 30,
     };
   }
 
@@ -102,8 +105,9 @@ export class Game {
     const spec = BUILDINGS[type];
     this.state.energy -= spec.cost;
     const hp = spec.hp || (type === 'generator' ? 80 : type === 'shield' ? 220 : 100);
-    this.state.buildings.push({ type, x, y, cooldown: 0, hp });
+    this.state.buildings.push({ type, x, y, cooldown: 0, hp, maxHp: hp });
     burst(this.state, x, y, spec.color, 22);
+    playBuild();
   }
 
   openUpgrades() {
@@ -119,6 +123,7 @@ export class Game {
     u.apply(this.state);
     this.state.mode = 'playing';
     this.state.upgChoices = [];
+    playUpgrade();
   }
 
   onMouseMove(event) {
@@ -168,7 +173,10 @@ export class Game {
     if (event.key === '5') s.selected = 'sniper';
 
     // Orbital strike
-    if (event.key === 'q' || event.key === 'Q') orbitalStrike(s);
+    if (event.key === 'q' || event.key === 'Q') {
+      orbitalStrike(s);
+      playOrbital();
+    }
 
     // Upgrades
     if (event.key === 'u' || event.key === 'U') this.openUpgrades();
@@ -193,6 +201,15 @@ export class Game {
       this.state.mode = 'gameover';
       burst(this.state, this.state.core.x, this.state.core.y, '#ff345d', 80, 2);
       this.state.shake = 25;
+      playGameOver();
+    }
+
+    // WIN condition: survive winWave waves
+    if (this.state.wave >= this.state.winWave && this.state.enemies.length === 0 && this.state.waveBudget === 0) {
+      this.state.mode = 'victory';
+      burst(this.state, this.state.core.x, this.state.core.y, '#00ff9d', 60, 2);
+      this.state.shake = 10;
+      playVictory();
     }
   }
 

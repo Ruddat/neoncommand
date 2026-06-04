@@ -1,4 +1,5 @@
 import { burst } from './ParticleSystem.js';
+import { playBossWarning, playWaveStart } from './AudioSystem.js';
 
 const ENEMY_TYPES = {
   scout: { hp: 35, speed: 62, size: 9, reward: 8, color: '#ff345d', energy: 4 },
@@ -19,9 +20,11 @@ export function spawnWave(state) {
     state.message = `BOSS WELLE ${state.wave}!`;
     burst(state, state.core.x, state.core.y, '#ff2bd6', 40, 1.5);
     state.shake = 12;
+    playBossWarning();
   } else {
     state.message = `Welle ${state.wave}`;
     if (state.wave <= 2) state.message += ' – Baue Verteidigung!';
+    playWaveStart();
   }
   state.msgTimer = 3;
 }

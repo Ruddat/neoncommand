@@ -26,6 +26,7 @@ export class Renderer {
 
     if (state.mode === 'playing') this.drawGhost(ctx, state, canBuildFn);
     if (state.mode === 'gameover') this.drawOverlay(ctx, w, h, 'CORE DESTROYED', C.red, state);
+    if (state.mode === 'victory') this.drawOverlay(ctx, w, h, 'SIEG!', C.green, state, true);
     if (state.paused) this.drawOverlay(ctx, w, h, 'PAUSED', C.cyan, state);
     if (state.mode === 'upgrading') this.drawUpgradeScreen(ctx, state, w, h);
   }
@@ -73,7 +74,7 @@ export class Renderer {
       ctx.restore();
 
       if (spec.range > 0) { ctx.save(); ctx.strokeStyle = spec.color; ctx.globalAlpha = .05; ctx.beginPath(); ctx.arc(b.x, b.y, range, 0, 7); ctx.stroke(); ctx.restore(); }
-      const maxHp = b.type === 'shield' ? 220 : b.type === 'generator' ? 80 : 100;
+      const maxHp = b.maxHp || (b.type === 'shield' ? 220 : b.type === 'generator' ? 80 : 100);
       if (b.hp < maxHp) this.drawBar(ctx, b.x - 18, b.y - 24, 36, 4, b.hp / maxHp, spec.color);
     }
   }
@@ -152,11 +153,15 @@ export class Renderer {
     ctx.textAlign = 'left';
   }
 
-  drawOverlay(ctx, w, h, text, color, state) {
+  drawOverlay(ctx, w, h, text, color, state, isVictory = false) {
     ctx.fillStyle = 'rgba(0,0,0,.75)'; ctx.fillRect(0, 0, w, h);
     ctx.textAlign = 'center'; ctx.fillStyle = color; ctx.font = '900 52px Arial'; ctx.fillText(text, w / 2, h / 2 - 35);
     ctx.fillStyle = C.white; ctx.font = '20px Arial';
-    ctx.fillText(`Welle ${state.wave} · Kills ${state.kills} · Score ${state.score}`, w / 2, h / 2 + 15);
+    if (isVictory) {
+      ctx.fillText(`Welle ${state.wave} erreicht! Alle ${state.winWave} Wellen überstanden!`, w / 2, h / 2 + 15);
+    } else {
+      ctx.fillText(`Welle ${state.wave} · Kills ${state.kills} · Score ${state.score}`, w / 2, h / 2 + 15);
+    }
     ctx.fillStyle = C.yellow; ctx.font = '16px Arial'; ctx.fillText(`Bester Combo: ${state.bestStreak || 0}x`, w / 2, h / 2 + 45);
     ctx.fillStyle = '#aaa'; ctx.font = '16px Arial'; ctx.fillText('R = Neustart', w / 2, h / 2 + 80);
     ctx.textAlign = 'left';
