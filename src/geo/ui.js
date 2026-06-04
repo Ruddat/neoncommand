@@ -34,7 +34,8 @@ export function drawIntel(G) {
     const pIcon = { aggressive: '\u2694\uFE0F', defensive: '\u{1F6E1}\uFE0F', diplomatic: '\u{1F91D}', expansive: '\u{1F4C8}' }[ai.personality] || '';
     const types = {}; ai.buildings.forEach(b => { types[b.type] = (types[b.type] || 0) + 1; });
     const bldSummary = Object.entries(types).map(([t, c]) => `${BLDS[t].symbol}${c}`).join(' ');
-    const hBar = '\u2588'.repeat(Math.floor(h / 10)) + '\u2591'.repeat(10 - Math.floor(h / 10));
+    const filled = Math.min(10, Math.max(0, Math.floor(h / 10)));
+    const hBar = '\u2588'.repeat(filled) + '\u2591'.repeat(10 - filled);
     html += `<div style="margin:3px 0;border-bottom:1px solid rgba(125,92,255,.1);padding-bottom:2px">${n.flag} <span style="color:${hCol}">${status}</span> ${pIcon} <span style="font-size:8px;color:#888">${hBar}</span></div>`;
     html += `<div style="font-size:9px;color:#999;margin-bottom:3px">\u{1F3ED}${ai.buildings.length} ${bldSummary} | \u{1F4B0}${Math.floor(ai.money)}$</div>`;
   }
