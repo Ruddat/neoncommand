@@ -158,3 +158,100 @@ export function playVictory() {
     o.start(t + i * 0.15); o.stop(t + i * 0.15 + 0.4);
   });
 }
+
+// ====== BACKGROUND MUSIC SYSTEM ======
+// Procedural darkwave synth that adapts to DEFCON level
+let musicInterval = null;
+let currentDefconForMusic = 5;
+
+export function startMusic(G) {
+  if (G.musicPlaying) return;
+  G.musicPlaying = true;
+
+  // Create a master gain for the music
+  if (!G.musicGain) {
+    const ctx = initAudio();
+    G.musicGain = ctx.createGain();
+    G.musicGain.gain.value = 0.06; // Quiet background
+    G.musicGain.connect(ctx.destination);
+  }
+
+  // Play a procedural beat loop
+  playMusicBeat(G);
+  musicInterval = setInterval(() => {
+    if (G.mode === 'playing' && G.musicPlaying) {
+      playMusicBeat(G);
+    }
+  }, 2000);
+}
+
+function playMusicBeat(G) {
+  if (!G.musicGain || !audioCtx) return;
+  const t = audioCtx.currentTime;
+  const dc = G.defcon || 5;
+  currentDefconForMusic = dc;
+
+  // Bass drone — always present, pitch drops with tension
+  const bassFreq = dc <= 2 ? 40 : dc <= 3 ? 50 : dc <= 4 ? 60 : 70;
+  const bass = audioCtx.createOscillator();
+  const bassGain = audioCtx.createGain();
+  bass.type = 'sawtooth';
+  bass.frequency.setValueAtTime(bassFreq, t);
+  bassGain.gain.setValueAtTime(0.15, t);
+  bassGain.gain.exponentialRampToValueAtTime(0.001, t + 1.8);
+  bass.connect(bassGain); bassGain.connect(G.musicGain);
+  bass.start(); bass.stop(t + 1.8);
+
+  // Sub-bass pulse — more present at higher DEFCON
+  if (dc <= 3) {
+    const sub = audioCtx.createOscillator();
+    const subGain = audioCtx.createGain();
+    sub.type = 'sine';
+    sub.frequency.setValueAtTime(bassFreq / 2, t);
+    subGain.gain.setValueAtTime(0.2, t);
+    subGain.gain.exponentialRampToValueAtTime(0.001, t + 2.5);
+    sub.connect(subGain); subGain.connect(G.musicGain);
+    sub.start(); sub.stop(t + 2.5);
+  }
+
+  // Rhythmic clicks/hats — speed increases with tension
+  const clickCount = dc <= 1 ? 8 : dc <= 2 ? 6 : dc <= 3 ? 4 : 2;
+  const clickDelay = dc <= 1 ? 0.2 : dc <= 2 ? 0.3 : dc <= 3 ? 0.45 : 0.8;
+  for (let i = 0; i < clickCount; i++) {
+    const click = audioCtx.createOscillator();
+    const clickGain = audioCtx.createGain();
+    click.type = 'square';
+    click.frequency.setValueAtTime(800 + Math.random() * 400, t + i * clickDelay);
+    clickGain.gain.setValueAtTime(0.03, t + i * clickDelay);
+    clickGain.gain.exponentialRampToValueAtTime(0.001, t + i * clickDelay + 0.05);
+    click.connect(clickGain); clickGain.connect(G.musicGain);
+    click.start(t + i * clickDelay); click.stop(t + i * clickDelay + 0.05);
+  }
+
+  // Pad chord — dark at low DEFCON, brighter at peace
+  if (Math.random() < (dc <= 2 ? 0.8 : dc <= 4 ? 0.4 : 0.2)) {
+    const padNotes = dc <= 2
+      ? [130.81, 155.56, 196] // Cm: C, Eb, G — dark
+      : dc <= 4
+        ? [146.83, 174.61, 220] // Dm: D, F, A — tense
+        : [164.81, 196, 246.94]; // E: E, G#, B — bright
+    padNotes.forEach(freq => {
+      const pad = audioCtx.createOscillator();
+      const padGain = audioCtx.createGain();
+      pad.type = 'sine';
+      pad.frequency.setValueAtTime(freq, t);
+      padGain.gain.setValueAtTime(0.05, t);
+      padGain.gain.exponentialRampToValueAtTime(0.001, t + 1.5);
+      pad.connect(padGain); padGain.connect(G.musicGain);
+      pad.start(); pad.stop(t + 1.5);
+    });
+  }
+}
+
+export function updateMusic(G) {
+  // Music intensity adapts automatically via DEFCON in playMusicBeat
+  // Just make sure it's running
+  if (G.musicPlaying && !musicInterval) {
+    startMusic(G);
+  }
+}

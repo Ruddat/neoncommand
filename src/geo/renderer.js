@@ -309,6 +309,24 @@ export function drawWorldMap(cx, G, W, H, canBuild) {
 
   drawScanlines(cx, W, H);
   drawBanner(cx, G, W, H);
+
+  // ====== WEATHER OVERLAY ======
+  drawWeather(cx, G, W, H);
+
+  // ====== NUCLEAR WINTER OVERLAY ======
+  if (G.nuclearWinter) {
+    cx.save();
+    // Blue-tinted frost overlay
+    cx.fillStyle = 'rgba(100,150,200,0.08)';
+    cx.fillRect(0, 0, W, H);
+    // Vignette frost
+    const frostGrad = cx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.2, W / 2, H / 2, Math.max(W, H) * 0.7);
+    frostGrad.addColorStop(0, 'rgba(136,204,255,0)');
+    frostGrad.addColorStop(1, 'rgba(136,204,255,0.15)');
+    cx.fillStyle = frostGrad;
+    cx.fillRect(0, 0, W, H);
+    cx.restore();
+  }
 }
 
 // ====== DRAW: GAME OVER ======
@@ -335,6 +353,49 @@ export function drawVictory(cx, G, W, H) {
   cx.fillText(`${NATIONS[G.nation].flag} ${NATIONS[G.nation].name} dominiert die Welt!`, W / 2, H / 2 - 10);
   cx.fillStyle = '#fff'; cx.font = '18px Arial';
   cx.fillText(`Runde ${G.turn} \u00b7 ${G.allies.length + 1}/5 Nationen verb\u00fcndet`, W / 2, H / 2 + 25);
-  cx.fillStyle = '#aaa'; cx.font = '16px Arial'; cx.fillText('R = Neustart', W / 2, H / 2 + 65);
+  if (G.nuclearWinter) {
+    cx.fillStyle = '#88ccff'; cx.font = '14px Arial';
+    cx.fillText('Aber zu welchem Preis... Nuklearwinter!', W / 2, H / 2 + 50);
+  }
+  cx.fillStyle = '#aaa'; cx.font = '16px Arial'; cx.fillText('R = Neustart', W / 2, H / 2 + 75);
   cx.textAlign = 'left';
+}
+
+// ====== DRAW: WEATHER ======
+function drawWeather(cx, G, W, H) {
+  for (const p of G.weatherParticles) {
+    cx.save();
+    const a = Math.min(1, p.life / 1.5);
+
+    if (p.type === 'snow') {
+      // Snow: white/blue circles with wobble
+      cx.globalAlpha = a * 0.8;
+      cx.fillStyle = '#c8e0ff';
+      cx.shadowColor = '#88ccff';
+      cx.shadowBlur = 3;
+      cx.beginPath();
+      cx.arc(p.x + Math.sin(Date.now() * 0.002 + p.y * 0.01) * 8, p.y, p.size, 0, Math.PI * 2);
+      cx.fill();
+    } else if (p.type === 'rain') {
+      // Rain: thin diagonal lines
+      cx.globalAlpha = a * 0.5;
+      cx.strokeStyle = '#6688cc';
+      cx.lineWidth = 1;
+      cx.beginPath();
+      cx.moveTo(p.x, p.y);
+      cx.lineTo(p.x + p.vx * 0.02, p.y + p.vy * 0.02);
+      cx.stroke();
+    } else if (p.type === 'peace') {
+      // Peace: soft glowing dots
+      cx.globalAlpha = a * 0.3;
+      cx.fillStyle = '#ffddaa';
+      cx.shadowColor = '#ffddaa';
+      cx.shadowBlur = 6;
+      cx.beginPath();
+      cx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+      cx.fill();
+    }
+
+    cx.restore();
+  }
 }

@@ -17,7 +17,9 @@ export function drawHUD(G) {
     <div style="font-size:10px;color:#888">Deine Geb\u00e4ude: ${G.buildings.length} | KI Geb\u00e4ude: ${aiBldCount} | Verb\u00fcndete: ${G.allies.length}/4</div>
     ${G.attackMode ? '<div style="font-size:12px;font-weight:900;color:#a855f7">\u{1F3AF} ANGRIFFSMODUS \u2013 Klicke auf Feind!</div>' : ''}
     ${G.diplomacyMode ? '<div style="font-size:12px;font-weight:900;color:#00ff9d">\u{1F91D} DIPLOMATIE \u2013 Klicke auf Nation! (-20$)</div>' : ''}
-    ${G.attackCooldown > 0 ? `<div style="font-size:10px;color:#ff345d">\u23F3 Raketen laden: ${Math.ceil(G.attackCooldown)}s</div>` : ''}`;
+    ${G.attackCooldown > 0 ? `<div style="font-size:10px;color:#ff345d">\u23F3 Raketen laden: ${Math.ceil(G.attackCooldown)}s</div>` : ''}
+    ${G.nuclearWinter ? '<div style="font-size:11px;font-weight:900;color:#88ccff">\u2744\uFE0F NUKLEARWINTER! Einkommen -30%</div>' : ''}
+    ${G.nukeCount > 0 && !G.nuclearWinter ? `<div style="font-size:10px;color:#ffb000">\u2622\uFE0F Nukes: ${G.nukeCount}/3 bis Winter</div>` : ''}`;
 }
 
 export function drawIntel(G) {

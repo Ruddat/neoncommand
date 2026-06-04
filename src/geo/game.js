@@ -7,7 +7,7 @@ import { updateAI } from './ai.js';
 import { drawCountrySelect, drawWorldMap, drawGameOver, drawVictory } from './renderer.js';
 import { launchAttack, counterAttack, aiVsAiAttack, setDimensions } from './combat.js';
 import { drawHUD, drawIntel, drawBuildBar, setupBuildBarEvents } from './ui.js';
-import { initAudio, playBuild, playAlert, playVictory as playVictorySound } from './audio.js';
+import { initAudio, playBuild, playAlert, playVictory as playVictorySound, startMusic, updateMusic } from './audio.js';
 
 // ====== CANVAS SETUP ======
 const cv = document.getElementById('gc');
@@ -85,10 +85,11 @@ function updateGame(dt) {
   G.turnTimer += dt;
   if (G.attackCooldown > 0) G.attackCooldown -= dt;
 
-  // Player income
+  // Player income (Nuclear Winter penalty)
   const facs = G.buildings.filter(b => b.type === 'factory');
   const facIncome = facs.reduce((s, b) => s + 15 * b.level, 0);
-  G.income = 10 + NATIONS[G.nation].eco * 2 + facIncome; G.money += G.income * dt;
+  const winterPenalty = G.nuclearWinter ? 0.7 : 1; // -30% income
+  G.income = (10 + NATIONS[G.nation].eco * 2 + facIncome) * winterPenalty; G.money += G.income * dt;
   const labs = G.buildings.filter(b => b.type === 'lab');
   const labTech = labs.reduce((s, b) => s + 2 * b.level, 0);
   G.tech += labTech * dt;
@@ -105,10 +106,11 @@ function updateGame(dt) {
   // AI updates
   for (const k of G.enemyNations) updateAI(k, G, dt, W, H);
 
-  // Hostility dynamics
+  // Hostility dynamics (Nuclear Winter increases all)
+  const winterHostility = G.nuclearWinter ? 1 : 0;
   for (const k of G.enemyNations) {
     const isAlly = G.allies.includes(k);
-    const baseInc = isAlly ? 0.2 : 0.8;
+    const baseInc = (isAlly ? 0.2 : 0.8) + winterHostility;
     G.hostility[k] = Math.min(100, G.hostility[k] + baseInc * dt);
   }
   G.allies.forEach(a => { G.hostility[a] = Math.max(0, G.hostility[a] - 1.5 * dt); });
@@ -141,6 +143,24 @@ function updateGame(dt) {
   // DEFCON
   G.defcon = calcDefcon(G);
   updateDefconDisplay(G);
+
+  // Nuclear Winter: lock DEFCON to 1 if winter active
+  if (G.nuclearWinter) G.defcon = 1;
+
+  // Weather particles
+  G.weatherTimer += dt;
+  if (G.weatherTimer > 0.05) {
+    G.weatherTimer = 0;
+    updateWeather(G, W, H);
+  }
+  for (let i = G.weatherParticles.length - 1; i >= 0; i--) {
+    const p = G.weatherParticles[i];
+    p.x += p.vx * dt; p.y += p.vy * dt; p.life -= dt;
+    if (p.life <= 0 || p.y > H + 20 || p.x < -20 || p.x > W + 20) G.weatherParticles.splice(i, 1);
+  }
+
+  // Background music
+  updateMusic(G);
 
   // Process scheduled events (replaces setTimeout)
   processScheduledEvents(G, dt);
@@ -317,6 +337,11 @@ function draw() {
     const pulse = Math.sin(Date.now() * 0.003) * 0.5 + 0.5;
     cx.save(); cx.fillStyle = `rgba(255,0,0,${pulse * 0.08})`; cx.fillRect(0, 0, W, H); cx.restore();
   }
+  // Nuclear Winter blue pulse
+  if (G.nuclearWinter && G.mode === 'playing') {
+    const pulse = Math.sin(Date.now() * 0.002) * 0.5 + 0.5;
+    cx.save(); cx.fillStyle = `rgba(136,204,255,${pulse * 0.04})`; cx.fillRect(0, 0, W, H); cx.restore();
+  }
 
   drawHUD(G); drawIntel(G); drawBuildBar(G);
 }
@@ -437,6 +462,73 @@ setupBuildBarEvents(G, addLog, playAlert);
 // Import for combat module
 import { playSiren } from './audio.js';
 import { spawnEMP } from './effects.js';
+
+// ====== WEATHER SYSTEM ======
+function updateWeather(G, W, H) {
+  const dc = G.defcon;
+  const maxParticles = G.nuclearWinter ? 250 : dc <= 2 ? 120 : dc <= 3 ? 40 : dc >= 5 ? 15 : 20;
+
+  // Limit total weather particles
+  if (G.weatherParticles.length >= maxParticles) return;
+
+  // Nuclear Winter: blizzard snow
+  if (G.nuclearWinter) {
+    for (let i = 0; i < 3; i++) {
+      G.weatherParticles.push({
+        x: Math.random() * W, y: -10,
+        vx: 30 + Math.random() * 60, vy: 60 + Math.random() * 100,
+        size: 2 + Math.random() * 4,
+        life: 4 + Math.random() * 3,
+        type: 'snow',
+      });
+    }
+    return;
+  }
+
+  // DEFCON-based weather
+  if (dc <= 2) {
+    // Rain + wind at DEFCON 1-2
+    G.weatherParticles.push({
+      x: Math.random() * W * 1.3 - W * 0.15, y: -10,
+      vx: -40 + Math.random() * -30, vy: 300 + Math.random() * 200,
+      size: 1.5, life: 2, type: 'rain',
+    });
+  } else if (dc <= 3) {
+    // Light rain at DEFCON 3
+    if (Math.random() < 0.3) {
+      G.weatherParticles.push({
+        x: Math.random() * W, y: -10,
+        vx: -20 + Math.random() * -10, vy: 200 + Math.random() * 100,
+        size: 1, life: 3, type: 'rain',
+      });
+    }
+  } else if (dc >= 5) {
+    // Peaceful: occasional gentle light particles
+    if (Math.random() < 0.05) {
+      G.weatherParticles.push({
+        x: Math.random() * W, y: Math.random() * H * 0.5,
+        vx: Math.random() * 10 - 5, vy: 5 + Math.random() * 10,
+        size: 1 + Math.random() * 2, life: 5 + Math.random() * 5,
+        type: 'peace',
+      });
+    }
+  }
+}
+
+// ====== NUCLEAR WINTER TRACKER ======
+export function registerNuke(G) {
+  G.nukeCount++;
+  if (G.nukeCount >= 3 && !G.nuclearWinter) {
+    G.nuclearWinter = true;
+    addLog(G, '❄️ NUKLEARWINTER! Einkommen -30%, alle Feindseligkeiten steigen!', 'r');
+    showBanner(G, '❄️ NUKLEARWINTER! Die Welt erfriert!', '#88ccff', 5);
+    G.shake = 15; G.flash = 1; G.flashColor = '#88ccff';
+  }
+}
+
+// Start music on first interaction
+cv.addEventListener('click', () => { initAudio(); startMusic(G); }, { once: true });
+addEventListener('keydown', () => { initAudio(); startMusic(G); }, { once: true });
 
 // ====== GAME LOOP ======
 function loop(t = 0) {

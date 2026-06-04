@@ -4,6 +4,7 @@ import { NATIONS, BLDS, MAP_POS, ALLY_MAP } from './data.js';
 import { rnd, burst, floatText, addLog, scheduleEvent } from './helpers.js';
 import { spawnMushroom, spawnShockwave, spawnEMP, spawnSmoke, showBanner } from './effects.js';
 import { playBoom, playNuke, playSiren, playBuild, playAlert } from './audio.js';
+import { registerNuke } from './game.js';
 
 // ====== AI ATTACK ON PLAYER ======
 export function launchAttack(G, fromKey) {
@@ -44,6 +45,7 @@ function startAttackScene(G, fromKey, strength) {
       burst(G, ex, ey, '#ff345d', 15, 1.5); burst(G, ex, ey, '#ffb000', 10);
       if (strength > 30) spawnMushroom(G, ex, ey, '#ff345d', 0.8);
       else { playBoom(0.4); spawnShockwave(G, ex, ey, '#ff345d', 80); }
+      if (strength > 30) registerNuke(G);
       G.shake = Math.max(G.shake, 12); G.flash = 0.8; G.flashColor = '#ff345d';
     });
   }
@@ -67,6 +69,7 @@ function resolveAttack(G, fromKey, strength) {
     }
     G.shake = 15; G.flash = 1; G.flashColor = '#ff345d'; playNuke(0.6);
     if (damage > 30) G.screenCrack = { life: 3 };
+    if (damage > 30) registerNuke(G);
   } else {
     addLog(G, `\u{1F6E1}\uFE0F ${n.flag} Angriff abgewehrt!`, 'g');
     G.hostility[fromKey] = Math.max(0, G.hostility[fromKey] - 5);
@@ -141,6 +144,7 @@ export function counterAttack(G, targetKey) {
       G.attackScene.explosions.push({ x: ex, y: ey, life: 1, max: 1, size: rnd(25, 60), color: '#a855f7' });
       burst(G, ex, ey, '#a855f7', 15, 1.5); burst(G, ex, ey, '#ffb000', 10);
       spawnMushroom(G, ex, ey, '#a855f7', 0.9);
+      registerNuke(G);
       spawnEMP(G, ex, ey);
       G.shake = Math.max(G.shake, 10); G.flash = 0.7; G.flashColor = '#a855f7';
     });
@@ -151,6 +155,7 @@ export function counterAttack(G, targetKey) {
       const idx = Math.floor(Math.random() * ai.buildings.length); const b = ai.buildings[idx];
       burst(G, b.x, b.y, '#ff345d', 20, 1.5); floatText(G, b.x, b.y - 25, 'BOOM!', '#ff345d', 20);
       spawnMushroom(G, b.x, b.y, '#a855f7', 1);
+      registerNuke(G);
       addLog(G, `\u{1F4A5} ${BLDS[b.type].label} von ${n.flag} zerst\u00f6rt!`, 'p'); ai.buildings.splice(idx, 1);
       if (b.type === 'milbase') ai.mil = Math.max(0, ai.mil - 3 * b.level);
       if (b.type === 'defense') ai.defense = Math.max(0, ai.defense - 5 * b.level);

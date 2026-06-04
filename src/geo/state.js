@@ -54,6 +54,15 @@ export function createState() {
     scheduledEvents: [],
     // Win tracking
     won: false,
+    // Nuclear Winter
+    nukeCount: 0,
+    nuclearWinter: false,
+    // Weather
+    weatherParticles: [],
+    weatherTimer: 0,
+    // Background music
+    musicPlaying: false,
+    musicGain: null,
   };
 }
 
@@ -88,6 +97,10 @@ export function selectNation(G, key) {
   G.screenCrack = null;
   G.scheduledEvents = [];
   G.won = false;
+  G.nukeCount = 0;
+  G.nuclearWinter = false;
+  G.weatherParticles = [];
+  G.weatherTimer = 0;
 
   for (const k of Object.keys(NATIONS)) {
     if (k !== key) G.ai[k] = createAIState(k);
