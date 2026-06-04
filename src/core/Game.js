@@ -6,6 +6,7 @@ import { updateResources } from '../systems/ResourceSystem.js';
 import { updateWaves, spawnWave } from '../systems/WaveSystem.js';
 import { updateCombat, orbitalStrike } from '../systems/CombatSystem.js';
 import { updateBossAbilities, updateBossEffects } from '../systems/BossSystem.js';
+import { recalcSynergies, updateSynergyEffects, getActiveSynergies } from '../systems/SynergySystem.js';
 import { updateParticles, burst } from '../systems/ParticleSystem.js';
 import { playBuild, playOrbital, playUpgrade, playVictory, playGameOver } from '../systems/AudioSystem.js';
 
@@ -78,6 +79,10 @@ export class Game {
       currentBossName: null,
       empRings: [],
       healPulses: [],
+      // Synergy system
+      synergyLinks: [],
+      overchargeAvailable: false,
+      overchargeActive: false,
     };
   }
 
@@ -112,9 +117,10 @@ export class Game {
     const spec = BUILDINGS[type];
     this.state.energy -= spec.cost;
     const hp = spec.hp || (type === 'generator' ? 80 : type === 'shield' ? 220 : 100);
-    this.state.buildings.push({ type, x, y, cooldown: 0, hp, maxHp: hp });
+    this.state.buildings.push({ type, x, y, cooldown: 0, hp, maxHp: hp, synergies: [], synDmg: 1, synRate: 1, synSplash: 1 });
     burst(this.state, x, y, spec.color, 22);
     playBuild();
+    recalcSynergies(this.state);
   }
 
   openUpgrades() {
@@ -201,6 +207,7 @@ export class Game {
     updateCombat(this.state, dt);
     updateBossAbilities(this.state, dt);
     updateBossEffects(this.state, dt);
+    updateSynergyEffects(this.state, dt);
     updateParticles(this.state, dt);
 
     if (this.state.killStreak > (this.state.bestStreak || 0)) this.state.bestStreak = this.state.killStreak;

@@ -1,6 +1,7 @@
 import { TILE } from './constants.js';
 import { BUILDINGS } from '../config/buildings.js';
 import { BOSS_TYPES, isEmpDisabled } from '../systems/BossSystem.js';
+import { SYNERGIES } from '../systems/SynergySystem.js';
 
 const C = {
   bg1: '#040714', bg2: '#03040a',
@@ -19,6 +20,7 @@ export class Renderer {
     if (state.mode === 'menu') { this.drawMenu(ctx, state, w, h); return; }
 
     this.drawBuildings(ctx, state);
+    this.drawSynergyLinks(ctx, state);
     this.drawCore(ctx, state);
     this.drawEnemies(ctx, state);
     this.drawProjectiles(ctx, state);
@@ -95,11 +97,81 @@ export class Renderer {
         ctx.beginPath(); ctx.moveTo(b.x - 8, b.y - 8); ctx.lineTo(b.x + 8, b.y + 8); ctx.stroke();
       }
 
+      // Synergy glow ring
+      if (b.synergies && b.synergies.length > 0 && !empOff) {
+        const synColors = b.synergies.map(id => SYNERGIES[id]?.color).filter(Boolean);
+        const glowColor = synColors[0] || C.cyan;
+        ctx.globalAlpha = 0.4 + Math.sin(Date.now() * 0.004) * 0.2;
+        ctx.strokeStyle = glowColor;
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(b.x, b.y, 22, 0, Math.PI * 2); ctx.stroke();
+        ctx.globalAlpha = 0.08;
+        ctx.fillStyle = glowColor;
+        ctx.beginPath(); ctx.arc(b.x, b.y, 22, 0, Math.PI * 2); ctx.fill();
+      }
+
       ctx.restore();
 
       if (spec.range > 0 && !empOff) { ctx.save(); ctx.strokeStyle = spec.color; ctx.globalAlpha = .05; ctx.beginPath(); ctx.arc(b.x, b.y, range, 0, 7); ctx.stroke(); ctx.restore(); }
       const maxHp = b.maxHp || (b.type === 'shield' ? 220 : b.type === 'generator' ? 80 : 100);
       if (b.hp < maxHp) this.drawBar(ctx, b.x - 18, b.y - 24, 36, 4, b.hp / maxHp, spec.color);
+    }
+  }
+
+  // Draw glowing synergy connection lines between buildings
+  drawSynergyLinks(ctx, state) {
+    if (!state.synergyLinks || state.synergyLinks.length === 0) return;
+    const time = Date.now();
+
+    for (const link of state.synergyLinks) {
+      ctx.save();
+      // Outer glow
+      ctx.strokeStyle = link.color;
+      ctx.globalAlpha = 0.12 + Math.sin(time * 0.003 + link.x1 * 0.1) * 0.06;
+      ctx.lineWidth = 6;
+      ctx.beginPath();
+      ctx.moveTo(link.x1, link.y1);
+      ctx.lineTo(link.x2, link.y2);
+      ctx.stroke();
+
+      // Inner line
+      ctx.globalAlpha = 0.5 + Math.sin(time * 0.004 + link.y1 * 0.1) * 0.2;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(link.x1, link.y1);
+      ctx.lineTo(link.x2, link.y2);
+      ctx.stroke();
+
+      // Traveling pulse dot
+      const t = ((time * 0.001 + link.x1 * 0.01) % 1);
+      const px = link.x1 + (link.x2 - link.x1) * t;
+      const py = link.y1 + (link.y2 - link.y1) * t;
+      ctx.globalAlpha = 0.8;
+      ctx.fillStyle = link.color;
+      ctx.shadowColor = link.color;
+      ctx.shadowBlur = 8;
+      ctx.beginPath();
+      ctx.arc(px, py, 3, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.restore();
+    }
+
+    // Overcharge visual: pulsing generators
+    if (state.overchargeActive) {
+      for (const b of state.buildings) {
+        if (b.synOvercharge) {
+          ctx.save();
+          ctx.globalAlpha = 0.2 + Math.sin(time * 0.008) * 0.15;
+          ctx.fillStyle = '#44ffaa';
+          ctx.shadowColor = '#44ffaa';
+          ctx.shadowBlur = 25;
+          ctx.beginPath();
+          ctx.arc(b.x, b.y, 25, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+      }
     }
   }
 
@@ -314,11 +386,15 @@ export class Renderer {
     ctx.textAlign = 'center';
     ctx.fillStyle = C.cyan; ctx.font = '900 80px Arial'; ctx.fillText('NEON', w / 2, h / 2 - 120);
     ctx.fillStyle = C.pink; ctx.font = '900 60px Arial'; ctx.fillText('COMMAND', w / 2, h / 2 - 50);
-    ctx.fillStyle = C.green; ctx.font = '17px Arial'; ctx.fillText('Tower Defense – Boss Edition', w / 2, h / 2 - 5);
+    ctx.fillStyle = C.green; ctx.font = '17px Arial'; ctx.fillText('Tower Defense – Synergy Edition', w / 2, h / 2 - 5);
 
     // Boss type preview
     ctx.fillStyle = '#aaa'; ctx.font = '13px Arial';
-    ctx.fillText('4 Boss-Typen: EMP ⚡ · Swarm ◎ · Heal + · Shield ◆', w / 2, h / 2 + 25);
+    ctx.fillText('4 Boss-Typen: EMP ⚡ · Swarm ◎ · Heal + · Shield ◆', w / 2, h / 2 + 20);
+
+    // Synergy preview
+    ctx.fillStyle = '#ff88ff'; ctx.font = '12px Arial';
+    ctx.fillText('Synergien: Laser+Sniper · Rakete+Schild · 3x Generator · Laser+Laser · Sniper+Schild · Rakete+Rakete', w / 2, h / 2 + 40);
 
     ctx.fillStyle = C.white; ctx.font = '14px Arial';
     ctx.fillText('Klick = Bauen · 1-5 = Gebäudetyp · Q = Orbital Strike', w / 2, h / 2 + 55);

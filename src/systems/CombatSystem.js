@@ -8,6 +8,9 @@ import {
 import {
   isEmpDisabled, spawnSwarmMinions, reflectDamage, BOSS_TYPES,
 } from './BossSystem.js';
+import {
+  getSynDmg, getSynRate, getSynSplash, hasSynEmpSlow, hasSynHealBoost, recalcSynergies,
+} from './SynergySystem.js';
 
 export function updateCombat(state, dt) {
   const { buildings, enemies, projectiles, core } = state;
@@ -15,10 +18,11 @@ export function updateCombat(state, dt) {
   // Track game time for EMP
   state.gameTime = (state.gameTime || 0) + dt;
 
-  // Shield healing
+  // Shield healing (with synergy boost)
   for (const b of buildings) {
     if (b.type === 'shield' && core.hp < core.maxHp) {
-      core.hp = Math.min(core.maxHp, core.hp + 8 * dt);
+      const healRate = hasSynHealBoost(b) ? 12 : 8;
+      core.hp = Math.min(core.maxHp, core.hp + healRate * dt);
     }
   }
 
@@ -26,7 +30,7 @@ export function updateCombat(state, dt) {
   state.killTimer = (state.killTimer || 0) - dt;
   if (state.killTimer <= 0) state.killStreak = 0;
 
-  // Turrets fire
+  // Turrets fire (with synergy bonuses)
   for (const building of buildings) {
     if (building.type === 'generator' || building.type === 'shield') continue;
 
@@ -47,15 +51,24 @@ export function updateCombat(state, dt) {
     }
 
     if (target) {
-      building.cooldown = 1 / (spec.rate * state.upgRate);
+      // Apply synergy rate bonus
+      const synRate = getSynRate(building);
+      building.cooldown = 1 / (spec.rate * state.upgRate * synRate);
       const angle = Math.atan2(target.y - building.y, target.x - building.x);
       const speed = building.type === 'missile' ? 320 : building.type === 'sniper' ? 850 : 600;
-      const dmg = spec.damage * state.upgDmg;
+      // Apply synergy damage bonus
+      const synDmg = getSynDmg(building);
+      const dmg = spec.damage * state.upgDmg * synDmg;
+      // Apply synergy splash bonus
+      const synSplash = getSynSplash(building);
+      const splashRadius = (spec.splash || 0) * synSplash;
+
       state.projectiles.push({
         x: building.x, y: building.y,
         vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
         dmg, color: spec.color, type: building.type,
-        life: 3, splash: spec.splash || 0, trail: [],
+        life: 3, splash: splashRadius, trail: [],
+        synEmpSlow: hasSynEmpSlow(building),
       });
       if (building.type === 'laser') playLaser();
       else if (building.type === 'missile') playMissileLaunch();
@@ -87,6 +100,7 @@ export function updateCombat(state, dt) {
             burst(state, b.x, b.y, '#ff345d', 30);
             playBuildingDestroyed();
             buildings.splice(j, 1);
+            recalcSynergies(state);
           }
           projectiles.splice(i, 1);
           break;
@@ -119,6 +133,12 @@ export function updateCombat(state, dt) {
         burst(state, p.x, p.y, p.color, 6);
         playExplosion(0.05);
 
+        // Synergy: EMP slow on hit (Missile+Shield)
+        if (p.synEmpSlow) {
+          enemy.speed = Math.max(8, enemy.speed * 0.7);
+          enemy.empSlowUntil = (state.gameTime || 0) + 2;
+        }
+
         if (p.type === 'sniper') {
           const a = Math.atan2(enemy.y - p.y, enemy.x - p.x);
           enemy.x += Math.cos(a) * 10; enemy.y += Math.sin(a) * 10;
@@ -131,6 +151,11 @@ export function updateCombat(state, dt) {
             if (sd < p.splash) {
               other.hp -= p.dmg * (1 - sd / p.splash) * 0.6;
               burst(state, other.x, other.y, p.color, 4);
+              // EMP slow on splash targets too
+              if (p.synEmpSlow) {
+                other.speed = Math.max(8, other.speed * 0.7);
+                other.empSlowUntil = (state.gameTime || 0) + 2;
+              }
             }
           }
           burst(state, p.x, p.y, p.color, 24, 1.3);
@@ -149,6 +174,19 @@ export function updateCombat(state, dt) {
     const enemy = enemies[i];
     const dx = core.x - enemy.x, dy = core.y - enemy.y;
     const d = Math.hypot(dx, dy) || 1;
+
+    // Restore speed after EMP slow wears off
+    if (enemy.empSlowUntil && state.gameTime > enemy.empSlowUntil) {
+      delete enemy.empSlowUntil;
+      // Re-derive speed from type (approximate restore)
+      if (!enemy.isBoss) {
+        const speeds = { scout: 62, soldier: 44, tank: 24, runner: 110 };
+        enemy.speed = speeds[Object.keys(speeds).find(k =>
+          Math.abs(speeds[k] - enemy.speed / 0.7) < 20
+        )] || enemy.speed;
+      }
+    }
+
     enemy.x += (dx / d) * enemy.speed * dt;
     enemy.y += (dy / d) * enemy.speed * dt;
 
@@ -166,7 +204,7 @@ export function updateCombat(state, dt) {
       if (bd < cr) {
         b.hp -= (enemy.isBoss ? 16 : 6) * dt;
         if (b.type === 'shield') { enemy.hp -= 6 * dt; enemy.speed = Math.max(8, enemy.speed * 0.97); }
-        if (b.hp <= 0) { burst(state, b.x, b.y, '#ff345d', 30); playBuildingDestroyed(); buildings.splice(j, 1); }
+        if (b.hp <= 0) { burst(state, b.x, b.y, '#ff345d', 30); playBuildingDestroyed(); buildings.splice(j, 1); recalcSynergies(state); }
       }
     }
 
