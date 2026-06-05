@@ -10,14 +10,16 @@ export function drawHUD(G) {
   const nt = Math.max(0, Math.ceil(G.turnLength - G.turnTimer));
   const aiBldCount = G.enemyNations.reduce((s, k) => s + (G.ai[k]?.buildings.length || 0), 0);
   el.innerHTML = `<div style="font-size:13px;font-weight:900;color:${n.color}">${n.flag} ${n.name}</div>
-    <div>Geld <b style="color:#ffb000">${Math.floor(G.money)}$</b> <span style="color:#888">(+${Math.floor(G.income)}/s)</span></div>
+    <div>Geld <b style="color:#ffb000">${Math.floor(G.money)}$</b> <span style="color:#888">(+${Math.floor(G.income)}/s)</span>${G.nuclearWinter ? ' <span style="color:#88ccff">\u2744\uFE0F -30%</span>' : ''}</div>
     <div>Mil <b style="color:#ef4444">${Math.floor(G.mil)}</b> \u00b7 Def <b style="color:#22c55e">${Math.floor(G.defense)}</b> \u00b7 Off <b style="color:#a855f7">${G.offense}</b></div>
-    <div>Tech <b style="color:#3b82f6">${Math.floor(G.tech)}</b></div><hr>
+    <div>Tech <b style="color:#3b82f6">${Math.floor(G.tech)}</b> \u00b7 Spione <b style="color:#ff2bd6">${G.spies || 0}</b></div><hr>
     <div>Runde <b>${G.turn}</b> \u00b7 N\u00e4chste in <b style="color:#00d9ff">${nt}s</b></div>
     <div style="font-size:10px;color:#888">Deine Geb\u00e4ude: ${G.buildings.length} | KI Geb\u00e4ude: ${aiBldCount} | Verb\u00fcndete: ${G.allies.length}/4</div>
     ${G.attackMode ? '<div style="font-size:12px;font-weight:900;color:#a855f7">\u{1F3AF} ANGRIFFSMODUS \u2013 Klicke auf Feind!</div>' : ''}
     ${G.diplomacyMode ? '<div style="font-size:12px;font-weight:900;color:#00ff9d">\u{1F91D} DIPLOMATIE \u2013 Klicke auf Nation! (-20$)</div>' : ''}
+    ${G.spyMode ? '<div style="font-size:12px;font-weight:900;color:#ff2bd6">\u{1F575}\uFE0F SPIONAGE \u2013 Klicke auf Nation! (X=Abbruch)</div>' : ''}
     ${G.attackCooldown > 0 ? `<div style="font-size:10px;color:#ff345d">\u23F3 Raketen laden: ${Math.ceil(G.attackCooldown)}s</div>` : ''}
+    ${G.spyCooldown > 0 ? `<div style="font-size:10px;color:#ff2bd6">\u{1F575}\uFE0F Spione auf Mission: ${Math.ceil(G.spyCooldown)}s</div>` : ''}
     ${G.nuclearWinter ? '<div style="font-size:11px;font-weight:900;color:#88ccff">\u2744\uFE0F NUKLEARWINTER! Einkommen -30%</div>' : ''}
     ${G.nukeCount > 0 && !G.nuclearWinter ? `<div style="font-size:10px;color:#ffb000">\u2622\uFE0F Nukes: ${G.nukeCount}/3 bis Winter</div>` : ''}`;
 }
@@ -55,6 +57,7 @@ export function drawBuildBar(G) {
   }
   html += `<div class="bb" data-action="diplomacy" style="border-color:#ff2bd6"><div class="k" style="color:#ff2bd6">D</div><div class="n" style="color:#ff2bd6">Diplomatie</div><div class="c">20$</div></div>`;
   html += `<div class="bb" data-action="attack" style="border-color:#a855f7;opacity:${G.offense > 0 && G.attackCooldown <= 0 ? 1 : 0.4}"><div class="k" style="color:#a855f7">K</div><div class="n" style="color:#a855f7">Angriff</div><div class="c">${G.offense > 0 ? Math.floor(G.offense / 15) + ' Raketen' : 'Baue Silo!'}</div></div>`;
+  html += `<div class="bb" data-action="spy" style="border-color:#ff2bd6;opacity:${(G.spies || 0) > 0 && (G.spyCooldown || 0) <= 0 ? 1 : 0.4}"><div class="k" style="color:#ff2bd6">X</div><div class="n" style="color:#ff2bd6">Spionage</div><div class="c">${(G.spies || 0) > 0 ? G.spies + ' Spione' : 'Baue HQ!'}</div></div>`;
   html += `<div class="bb" data-action="upgrade" style="border-color:#fbbf24"><div class="k" style="color:#fbbf24">U</div><div class="n" style="color:#fbbf24">Upgrade</div><div class="c">Klick+U</div></div>`;
   el.innerHTML = html;
 }
@@ -73,14 +76,20 @@ export function setupBuildBarEvents(G, addLog, playAlert) {
     } else if (action === 'diplomacy') {
       if (G.money < 20) { addLog(G, 'Nicht genug Geld! (20$ n\u00f6tig)', 'r'); playAlert(); return; }
       if (G.diplomacyMode) { G.diplomacyMode = false; addLog(G, 'Diplomatie abgebrochen', 'c'); return; }
-      G.diplomacyMode = true; G.attackMode = false;
+      G.diplomacyMode = true; G.attackMode = false; G.spyMode = false;
       addLog(G, '\u{1F91D} Klicke auf eine Nation f\u00fcr Diplomatie! (-20$)', 'g'); playAlert();
     } else if (action === 'attack') {
       if (G.offense <= 0) { addLog(G, 'Kein Raketensilo! Baue erst Silos!', 'r'); playAlert(); return; }
       if (G.attackCooldown > 0) { addLog(G, 'Raketen laden noch nach!', 'y'); playAlert(); return; }
       if (G.attackMode) { G.attackMode = false; addLog(G, 'Angriff abgebrochen', 'c'); return; }
-      G.attackMode = true; G.diplomacyMode = false;
+      G.attackMode = true; G.diplomacyMode = false; G.spyMode = false;
       addLog(G, '\u{1F3AF} Klicke auf eine Nation zum Angreifen! (K=Abbruch)', 'p'); playAlert();
+    } else if (action === 'spy') {
+      if ((G.spies || 0) <= 0) { addLog(G, 'Kein Spionage-HQ! Baue erst Spionage-HQs!', 'r'); playAlert(); return; }
+      if ((G.spyCooldown || 0) > 0) { addLog(G, 'Spione auf Mission!', 'y'); playAlert(); return; }
+      if (G.spyMode) { G.spyMode = false; addLog(G, 'Spionage abgebrochen', 'c'); return; }
+      G.spyMode = true; G.attackMode = false; G.diplomacyMode = false;
+      addLog(G, '\u{1F575}\uFE0F Klicke auf eine Nation f\u00fcr Spionage! (X=Abbruch)', 'p'); playAlert();
     } else if (action === 'upgrade') {
       addLog(G, '\u2B06 Klicke auf dein Geb\u00e4ude zum Upgraden! (oder U+Klick)', 'y'); playAlert();
       G.selected = '__upgrade';

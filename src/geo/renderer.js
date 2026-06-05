@@ -39,6 +39,21 @@ export function drawBuilding(cx, b, alpha = 1, nationColor = null) {
   } else if (b.type === 'silo') {
     cx.fillRect(-5, -12, 10, 24); cx.fillStyle = '#000'; cx.font = '9px Arial'; cx.textAlign = 'center'; cx.fillText('R', 0, 3);
     if (b.level > 1) { cx.fillStyle = spec.color; cx.font = 'bold 7px Arial'; cx.fillText(b.level, 5, -8); }
+  } else if (b.type === 'spyhq') {
+    // Spy HQ: hexagon shape with eye symbol
+    cx.beginPath();
+    for (let i = 0; i < 6; i++) {
+      const a = i * Math.PI / 3 - Math.PI / 6;
+      const r = 11;
+      cx[i === 0 ? 'moveTo' : 'lineTo'](Math.cos(a) * r, Math.sin(a) * r);
+    }
+    cx.closePath(); cx.fill();
+    cx.fillStyle = '#000'; cx.font = 'bold 9px Arial'; cx.textAlign = 'center'; cx.fillText('S', 0, 3);
+    if (b.level > 1) { cx.fillStyle = spec.color; cx.font = 'bold 7px Arial'; cx.fillText(b.level, 7, -8); }
+    // Pulsing detection ring
+    const pulseR = 16 + b.level * 3 + Math.sin(Date.now() * 0.004 + b.x) * 3;
+    cx.globalAlpha = alpha * age * 0.2; cx.strokeStyle = spec.color; cx.lineWidth = 1;
+    cx.beginPath(); cx.arc(0, 0, pulseR, 0, 7); cx.stroke();
   }
   cx.textAlign = 'left'; cx.globalAlpha = 1; cx.restore();
 }
@@ -166,6 +181,14 @@ export function drawWorldMap(cx, G, W, H, canBuild) {
       else if (G.selected === 'lab') { cx.beginPath(); cx.moveTo(G.mouseX, G.mouseY - 11); cx.lineTo(G.mouseX + 9, G.mouseY); cx.lineTo(G.mouseX, G.mouseY + 11); cx.lineTo(G.mouseX - 9, G.mouseY); cx.closePath(); cx.fill(); }
       else if (G.selected === 'defense') { cx.beginPath(); cx.arc(G.mouseX, G.mouseY, 11, 0, 7); cx.fill(); }
       else if (G.selected === 'silo') cx.fillRect(G.mouseX - 5, G.mouseY - 12, 10, 24);
+      else if (G.selected === 'spyhq') {
+        cx.beginPath();
+        for (let i = 0; i < 6; i++) {
+          const a = i * Math.PI / 3 - Math.PI / 6;
+          cx[i === 0 ? 'moveTo' : 'lineTo'](G.mouseX + Math.cos(a) * 11, G.mouseY + Math.sin(a) * 11);
+        }
+        cx.closePath(); cx.fill();
+      }
       cx.restore();
     } else if (G.selected && G.selected !== '__upgrade') {
       cx.save(); cx.globalAlpha = 0.25; cx.fillStyle = '#ff345d';
@@ -221,6 +244,19 @@ export function drawWorldMap(cx, G, W, H, canBuild) {
       cx.save(); cx.strokeStyle = mouseNear ? '#00ff9d' : '#00ff9d33';
       cx.lineWidth = mouseNear ? 3 : 1; cx.setLineDash(mouseNear ? [] : [4, 4]);
       cx.beginPath(); cx.arc(px, py, 35 + Math.sin(Date.now() * 0.004) * 4, 0, 7); cx.stroke();
+      cx.setLineDash([]); cx.restore();
+    }
+    // Spy mode targeting
+    if (G.spyMode && !isP) {
+      cx.save(); cx.strokeStyle = mouseNear ? '#ff2bd6' : '#ff2bd633';
+      cx.lineWidth = mouseNear ? 3 : 1; cx.setLineDash(mouseNear ? [] : [3, 5]);
+      cx.beginPath(); cx.arc(px, py, 35 + Math.sin(Date.now() * 0.006) * 5, 0, 7); cx.stroke();
+      if (mouseNear) {
+        // Crosshair
+        cx.setLineDash([]); cx.strokeStyle = '#ff2bd6'; cx.lineWidth = 1;
+        cx.beginPath(); cx.moveTo(px - 20, py); cx.lineTo(px + 20, py); cx.stroke();
+        cx.beginPath(); cx.moveTo(px, py - 20); cx.lineTo(px, py + 20); cx.stroke();
+      }
       cx.setLineDash([]); cx.restore();
     }
 
@@ -306,6 +342,64 @@ export function drawWorldMap(cx, G, W, H, canBuild) {
   cx.globalAlpha = 1; cx.textAlign = 'center';
   for (const t of G.texts) { const a = Math.max(0, t.life / t.max); cx.globalAlpha = a; cx.fillStyle = t.color; cx.font = `bold ${t.size || 15}px Arial`; cx.fillText(t.text, t.x, t.y); }
   cx.globalAlpha = 1; cx.textAlign = 'left';
+
+  // Trade route lines between player and allies
+  if (G.nation && G.allies.length > 0) {
+    const mp = MAP_POS[G.nation], mx = mp.x * W, my = mp.y * H;
+    for (const a of G.allies) {
+      const ap = MAP_POS[a]; if (!ap) continue;
+      const ax = ap.x * W, ay = ap.y * H;
+      const pulse = G.tradePulse || 0;
+      // Draw trade route line
+      cx.save();
+      cx.strokeStyle = '#00ff9d33';
+      cx.lineWidth = 2;
+      cx.setLineDash([8, 12]);
+      cx.lineDashOffset = -pulse * 10;
+      cx.beginPath(); cx.moveTo(mx, my); cx.lineTo(ax, ay); cx.stroke();
+      cx.setLineDash([]);
+      // Animated trade packet dots
+      const dist = Math.hypot(ax - mx, ay - my);
+      const numDots = Math.max(2, Math.floor(dist / 60));
+      for (let i = 0; i < numDots; i++) {
+        const t = ((i / numDots) + pulse * 0.15) % 1;
+        const dx = mx + (ax - mx) * t;
+        const dy = my + (ay - my) * t;
+        const dotAlpha = 0.3 + 0.4 * Math.sin(t * Math.PI);
+        cx.globalAlpha = dotAlpha;
+        cx.fillStyle = '#00ff9d';
+        cx.beginPath(); cx.arc(dx, dy, 2, 0, 7); cx.fill();
+      }
+      cx.restore();
+    }
+  }
+
+  // Nuclear Winter overlay
+  if (G.nuclearWinter) {
+    cx.save();
+    // Snow particle overlay
+    const t = Date.now() * 0.001;
+    cx.globalAlpha = 0.15;
+    cx.fillStyle = '#88ccff';
+    for (let i = 0; i < 50; i++) {
+      const sx = ((i * 137.5 + t * 30) % W);
+      const sy = ((i * 97.3 + t * (20 + i * 0.5)) % H);
+      const sz = 1 + (i % 3);
+      cx.beginPath(); cx.arc(sx, sy, sz, 0, 7); cx.fill();
+    }
+    // Blue-grey fog overlay
+    cx.globalAlpha = 0.08;
+    cx.fillStyle = '#446688';
+    cx.fillRect(0, 0, W, H);
+    // DEFCON 1 locked indicator
+    cx.globalAlpha = 0.6;
+    cx.fillStyle = '#88ccff';
+    cx.font = 'bold 10px Arial';
+    cx.textAlign = 'right';
+    cx.fillText('\u2744\uFE0F NUKLEARWINTER \u2744\uFE0F', W - 10, H - 80);
+    cx.textAlign = 'left';
+    cx.restore();
+  }
 
   drawScanlines(cx, W, H);
   drawBanner(cx, G, W, H);

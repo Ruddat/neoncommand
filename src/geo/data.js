@@ -22,6 +22,7 @@ export const BLDS = {
   lab: { label: 'Forschungslab', key: '3', cost: 70, color: '#3b82f6', symbol: 'T', desc: '+2 Tech/s' },
   defense: { label: 'Abwehrsystem', key: '4', cost: 100, color: '#22c55e', symbol: 'D', desc: '+5 Verteidigung' },
   silo: { label: 'Raketensilo', key: '5', cost: 150, color: '#a855f7', symbol: 'R', desc: 'Gegenangriff' },
+  spyhq: { label: 'Spionage-HQ', key: '6', cost: 120, color: '#ff2bd6', symbol: 'S', desc: 'Sabotage + Intel' },
 };
 
 export const ALLY_MAP = {

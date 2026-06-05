@@ -3,8 +3,7 @@
 import { NATIONS, BLDS, MAP_POS, ALLY_MAP } from './data.js';
 import { rnd, burst, floatText, addLog, scheduleEvent } from './helpers.js';
 import { spawnMushroom, spawnShockwave, spawnEMP, spawnSmoke, showBanner } from './effects.js';
-import { playBoom, playNuke, playSiren, playBuild, playAlert } from './audio.js';
-import { registerNuke } from './game.js';
+import { playBoom, playNuke, playSiren, playBuild, playAlert, playNuclearWinter } from './audio.js';
 
 // ====== AI ATTACK ON PLAYER ======
 export function launchAttack(G, fromKey) {
@@ -45,7 +44,7 @@ function startAttackScene(G, fromKey, strength) {
       burst(G, ex, ey, '#ff345d', 15, 1.5); burst(G, ex, ey, '#ffb000', 10);
       if (strength > 30) spawnMushroom(G, ex, ey, '#ff345d', 0.8);
       else { playBoom(0.4); spawnShockwave(G, ex, ey, '#ff345d', 80); }
-      if (strength > 30) registerNuke(G);
+      if (strength > 30) { G.nukeCount++; if (G.nukeCount >= 3 && !G.nuclearWinter) triggerNuclearWinter(G); }
       G.shake = Math.max(G.shake, 12); G.flash = 0.8; G.flashColor = '#ff345d';
     });
   }
@@ -69,7 +68,7 @@ function resolveAttack(G, fromKey, strength) {
     }
     G.shake = 15; G.flash = 1; G.flashColor = '#ff345d'; playNuke(0.6);
     if (damage > 30) G.screenCrack = { life: 3 };
-    if (damage > 30) registerNuke(G);
+    if (damage > 30) { G.nukeCount++; if (G.nukeCount >= 3 && !G.nuclearWinter) triggerNuclearWinter(G); }
   } else {
     addLog(G, `\u{1F6E1}\uFE0F ${n.flag} Angriff abgewehrt!`, 'g');
     G.hostility[fromKey] = Math.max(0, G.hostility[fromKey] - 5);
@@ -144,7 +143,7 @@ export function counterAttack(G, targetKey) {
       G.attackScene.explosions.push({ x: ex, y: ey, life: 1, max: 1, size: rnd(25, 60), color: '#a855f7' });
       burst(G, ex, ey, '#a855f7', 15, 1.5); burst(G, ex, ey, '#ffb000', 10);
       spawnMushroom(G, ex, ey, '#a855f7', 0.9);
-      registerNuke(G);
+      G.nukeCount++; if (G.nukeCount >= 3 && !G.nuclearWinter) triggerNuclearWinter(G);
       spawnEMP(G, ex, ey);
       G.shake = Math.max(G.shake, 10); G.flash = 0.7; G.flashColor = '#a855f7';
     });
@@ -155,7 +154,7 @@ export function counterAttack(G, targetKey) {
       const idx = Math.floor(Math.random() * ai.buildings.length); const b = ai.buildings[idx];
       burst(G, b.x, b.y, '#ff345d', 20, 1.5); floatText(G, b.x, b.y - 25, 'BOOM!', '#ff345d', 20);
       spawnMushroom(G, b.x, b.y, '#a855f7', 1);
-      registerNuke(G);
+      G.nukeCount++; if (G.nukeCount >= 3 && !G.nuclearWinter) triggerNuclearWinter(G);
       addLog(G, `\u{1F4A5} ${BLDS[b.type].label} von ${n.flag} zerst\u00f6rt!`, 'p'); ai.buildings.splice(idx, 1);
       if (b.type === 'milbase') ai.mil = Math.max(0, ai.mil - 3 * b.level);
       if (b.type === 'defense') ai.defense = Math.max(0, ai.defense - 5 * b.level);
@@ -165,9 +164,37 @@ export function counterAttack(G, targetKey) {
     G.hostility[targetKey] += 20;
     const theirAllies = ALLY_MAP[targetKey] || [];
     theirAllies.forEach(ally => {
-      if (ally !== G.nation) { G.hostility[ally] += 10; addLog(G, `\u{1F621} ${NATIONS[ally].flag} ist w\u00fctend \u00fcber deinen Angriff! (+10)`, 'y'); }
+      if (ally !== G.nation) {
+        // FIX: Current allies don't get angry when you attack their former ally
+        if (G.allies.includes(ally)) {
+          const allyHostilityToTarget = G.hostility[targetKey] || 0;
+          if (allyHostilityToTarget > 40) {
+            // Common enemy bonus: ally approves of you fighting their enemy
+            G.hostility[ally] = Math.max(0, G.hostility[ally] - 5);
+            addLog(G, `\u{1F91D} ${NATIONS[ally].flag} unterst\u00fctzt den Angriff auf ihren Feind! (-5)`, 'g');
+          } else {
+            // Mild concern but no real anger
+            G.hostility[ally] += 2;
+            addLog(G, `\u26A0\uFE0F ${NATIONS[ally].flag} ist besorgt \u00fcber Eskalation (+2)`, 'y');
+          }
+        } else {
+          G.hostility[ally] += 10;
+          addLog(G, `\u{1F621} ${NATIONS[ally].flag} ist w\u00fctend \u00fcber deinen Angriff! (+10)`, 'y');
+        }
+      }
     });
+
   });
+}
+
+// ====== NUCLEAR WINTER ======
+export function triggerNuclearWinter(G) {
+  G.nuclearWinter = true;
+  G.nuclearWinterTimer = 0;
+  G.income = Math.floor(G.income * 0.7);
+  addLog(G, '\u2744\uFE0F NUKLEARWINTER! Globales Einkommen -30%!', 'r');
+  showBanner(G, '\u2744\uFE0F NUKLEARWINTER EINGESETZT!', '#88ccff', 4);
+  playNuclearWinter();
 }
 
 // ====== AI vs AI COMBAT ======

@@ -25,6 +25,7 @@ export function createState() {
     enemyNations: [],
     attackMode: false,
     diplomacyMode: false,
+    spyMode: false,
     turn: 0,
     turnTimer: 0,
     turnLength: 12,
@@ -57,12 +58,19 @@ export function createState() {
     // Nuclear Winter
     nukeCount: 0,
     nuclearWinter: false,
+    nuclearWinterTimer: 0,
     // Weather
     weatherParticles: [],
     weatherTimer: 0,
     // Background music
     musicPlaying: false,
     musicGain: null,
+    // Spionage
+    spies: 0,
+    spyCooldown: 0,
+    spyTargets: [],
+    // Trade route animation
+    tradePulse: 0,
   };
 }
 
@@ -95,12 +103,20 @@ export function selectNation(G, key) {
   G.slowMoFactor = 1;
   G.attackCooldown = 0;
   G.screenCrack = null;
+  G.attackMode = false;
+  G.diplomacyMode = false;
+  G.spyMode = false;
   G.scheduledEvents = [];
   G.won = false;
   G.nukeCount = 0;
   G.nuclearWinter = false;
+  G.nuclearWinterTimer = 0;
   G.weatherParticles = [];
   G.weatherTimer = 0;
+  G.spies = 0;
+  G.spyCooldown = 0;
+  G.spyTargets = [];
+  G.tradePulse = 0;
 
   for (const k of Object.keys(NATIONS)) {
     if (k !== key) G.ai[k] = createAIState(k);

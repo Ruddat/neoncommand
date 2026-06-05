@@ -2,12 +2,12 @@
 import { NATIONS, BLDS, MAP_POS, ALLY_MAP, WIN_ROUNDS, WIN_ALLIES } from './data.js';
 import { createState, selectNation } from './state.js';
 import { rnd, burst, floatText, addLog, scheduleEvent, processScheduledEvents, clearScheduledEvents } from './helpers.js';
-import { spawnShockwave, spawnMushroom, spawnSmoke, showBanner, calcDefcon, updateDefconDisplay } from './effects.js';
+import { spawnShockwave, spawnMushroom, spawnSmoke, spawnEMP, showBanner, calcDefcon, updateDefconDisplay } from './effects.js';
 import { updateAI } from './ai.js';
 import { drawCountrySelect, drawWorldMap, drawGameOver, drawVictory } from './renderer.js';
 import { launchAttack, counterAttack, aiVsAiAttack, setDimensions } from './combat.js';
 import { drawHUD, drawIntel, drawBuildBar, setupBuildBarEvents } from './ui.js';
-import { initAudio, playBuild, playAlert, playVictory as playVictorySound, startMusic, updateMusic } from './audio.js';
+import { initAudio, playBuild, playAlert, playBoom, playSiren, playVictory as playVictorySound, startMusic, updateMusic } from './audio.js';
 
 // ====== CANVAS SETUP ======
 const cv = document.getElementById('gc');
@@ -51,6 +51,7 @@ function build(type, mx, my) {
   if (type === 'milbase') G.mil += 3;
   if (type === 'defense') G.defense += 5;
   if (type === 'silo') { G.offense += 15; addLog(G, '\u{1F680} Raketen bereit!', 'p'); }
+  if (type === 'spyhq') { G.spies += 1; addLog(G, '\u{1F575}\uFE0F Spione rekrutiert! (X=Spionieren)', 'p'); }
 }
 
 function upgradePlayerBuilding(mx, my) {
@@ -73,6 +74,72 @@ function upgradePlayerBuilding(mx, my) {
   spawnShockwave(G, b.x, b.y, spec.color, 60);
   addLog(G, `\u2B06 ${spec.label} \u2192 Lvl ${b.level}! (-${cost}$)`, 'g');
   playBuild();
+}
+
+// ====== SPY MISSION SYSTEM ======
+function executeSpyMission(G, targetKey) {
+  if (G.spies <= 0 || G.spyCooldown > 0) return;
+  const n = NATIONS[targetKey];
+  const ai = G.ai[targetKey];
+  G.spyCooldown = 8; // 8 second cooldown
+  const spyPower = G.spies;
+  const roll = Math.random();
+  const pos = MAP_POS[targetKey];
+  const px = pos.x * W, py = pos.y * H;
+
+  if (roll < 0.35) {
+    // SABOTAGE: Destroy a random building
+    if (ai && ai.buildings.length > 0) {
+      const idx = Math.floor(Math.random() * ai.buildings.length);
+      const b = ai.buildings[idx];
+      const spec = BLDS[b.type];
+      burst(G, b.x, b.y, '#ff2bd6', 25, 1.5);
+      burst(G, b.x, b.y, '#ffffff', 10, 0.8);
+      floatText(G, b.x, b.y - 25, `\u{1F4A5} SABOTAGE!`, '#ff2bd6', 18);
+      spawnShockwave(G, b.x, b.y, '#ff2bd6', 80);
+      addLog(G, `\u{1F575}\uFE0F Sabotage! ${n.flag} ${spec.label} zerst\u00f6rt!`, 'p');
+      ai.buildings.splice(idx, 1);
+      if (b.type === 'milbase') ai.mil = Math.max(0, ai.mil - 3 * b.level);
+      if (b.type === 'defense') ai.defense = Math.max(0, ai.defense - 5 * b.level);
+      if (b.type === 'silo') ai.offense = Math.max(0, ai.offense - 15 * b.level);
+      G.hostility[targetKey] = Math.min(100, G.hostility[targetKey] + 10);
+      playBoom(0.4);
+    } else {
+      addLog(G, `\u{1F575}\uFE0F ${n.flag} hat keine Geb\u00e4ude zum Sabotieren!`, 'y');
+    }
+  } else if (roll < 0.6) {
+    // INTEL: Reveal detailed info + reduce hostility
+    const intel = [];
+    if (ai) {
+      intel.push(`Mil: ${Math.floor(ai.mil)} | Def: ${Math.floor(ai.defense)} | Off: ${Math.floor(ai.offense)}`);
+      intel.push(`Geld: ${Math.floor(ai.money)}$ | Tech: ${Math.floor(ai.tech)}`);
+      const types = {}; ai.buildings.forEach(b => { types[b.type] = (types[b.type] || 0) + 1; });
+      intel.push(Object.entries(types).map(([t, c]) => `${BLDS[t].label}\u00d7${c}`).join(', '));
+    }
+    G.hostility[targetKey] = Math.max(0, G.hostility[targetKey] - 8 * spyPower);
+    addLog(G, `\u{1F575}\uFE0F Intel: ${n.flag} — ${intel.join(' | ')}`, 'c');
+    addLog(G, `\u{1F575}\uFE0F Beziehungen zu ${n.flag} verbessert durch verdeckte Diplomatie! (-${8 * spyPower})`, 'g');
+    spawnShockwave(G, px, py, '#ff2bd6', 100);
+    playBuild();
+  } else if (roll < 0.8) {
+    // STEAL MONEY
+    const stolen = Math.floor(30 + spyPower * 20 + Math.random() * 40);
+    G.money += stolen;
+    if (ai) ai.money = Math.max(0, ai.money - stolen);
+    floatText(G, px, py - 30, `+${stolen}$`, '#ff2bd6', 18);
+    burst(G, px, py, '#ff2bd6', 20, 1);
+    addLog(G, `\u{1F575}\uFE0F Geld gestohlen! +${stolen}$ von ${n.flag}!`, 'p');
+    G.hostility[targetKey] = Math.min(100, G.hostility[targetKey] + 5);
+    playBuild();
+  } else {
+    // CAUGHT! Spy fails, hostility increases
+    G.hostility[targetKey] = Math.min(100, G.hostility[targetKey] + 15);
+    floatText(G, px, py - 30, `\u{1F6A8} ERWISCHT!`, '#ff345d', 18);
+    burst(G, px, py, '#ff345d', 15, 1);
+    addLog(G, `\u{1F575}\uFE0F Spion entdeckt! ${n.flag} ist w\u00fctend! (+15)`, 'r');
+    showBanner(G, `\u{1F6A8} SPION ERWISCHT! ${n.flag}`, '#ff345d', 2);
+    playSiren();
+  }
 }
 
 // ====== GAME LOGIC ======
@@ -103,6 +170,13 @@ function updateGame(dt) {
   G.defense = NATIONS[G.nation].mil + defTotal;
   G.offense = siloTotal;
 
+  // Spies update
+  if (G.spyCooldown > 0) G.spyCooldown -= dt;
+  G.spies = G.buildings.filter(b => b.type === 'spyhq').reduce((s, b) => s + b.level, 0);
+
+  // Trade route pulse animation
+  G.tradePulse = (G.tradePulse || 0) + dt * 2;
+
   // AI updates
   for (const k of G.enemyNations) updateAI(k, G, dt, W, H);
 
@@ -110,10 +184,17 @@ function updateGame(dt) {
   const winterHostility = G.nuclearWinter ? 1 : 0;
   for (const k of G.enemyNations) {
     const isAlly = G.allies.includes(k);
-    const baseInc = (isAlly ? 0.2 : 0.8) + winterHostility;
+    const baseInc = (isAlly ? 0.1 : 0.8) + winterHostility;
     G.hostility[k] = Math.min(100, G.hostility[k] + baseInc * dt);
   }
-  G.allies.forEach(a => { G.hostility[a] = Math.max(0, G.hostility[a] - 1.5 * dt); });
+  G.allies.forEach(a => { G.hostility[a] = Math.max(0, G.hostility[a] - 2.5 * dt); });
+
+  // Nuclear Winter effects
+  if (G.nuclearWinter) {
+    G.nuclearWinterTimer = (G.nuclearWinterTimer || 0) + dt;
+    // Income penalty already applied in triggerNuclearWinter, but keep reinforcing
+    if (G.income > 0) G.income = Math.floor(G.income * 0.97); // slow decay
+  }
 
   // Ally betrayal
   for (let i = G.allies.length - 1; i >= 0; i--) {
@@ -230,14 +311,20 @@ function processTurn() {
   }
 
   const eventRoll = Math.random();
-  if (eventRoll < 0.08) {
-    if (G.allies.length > 0) {
+  if (eventRoll < 0.06) {
+    // Spy scandal — targets NON-allies more often, allies only mildly
+    const nonAllies = G.enemyNations.filter(k => !G.allies.includes(k));
+    if (nonAllies.length > 0 && Math.random() < 0.6) {
+      const t = nonAllies[Math.floor(Math.random() * nonAllies.length)];
+      G.hostility[t] += 15;
+      addLog(G, `\u{1F575}\uFE0F Spionage-Skandal mit ${NATIONS[t].flag}! (+15)`, 'r');
+      showBanner(G, `\u{1F575}\uFE0F SPIONAGE! ${NATIONS[t].flag} entdeckt!`, '#ffb000', 2);
+    } else if (G.allies.length > 0) {
       const a = G.allies[Math.floor(Math.random() * G.allies.length)];
-      G.hostility[a] += 20;
-      addLog(G, `\u{1F575}\uFE0F Spionage-Skandal! ${NATIONS[a].flag} ist w\u00fctend! (+20 Feindseligkeit)`, 'r');
-      showBanner(G, `\u{1F575}\uFE0F SPIONAGE! ${NATIONS[a].flag} entdeckt!`, '#ffb000', 2);
+      G.hostility[a] += 8;
+      addLog(G, `\u{1F575}\uFE0F Spionage-Vorwurf! ${NATIONS[a].flag} ist ver\u00e4rgert! (+8)`, 'y');
     }
-  } else if (eventRoll < 0.14) {
+  } else if (eventRoll < 0.12) {
     const enemies = G.enemyNations.filter(k => !G.allies.includes(k) && G.hostility[k] > 20);
     if (enemies.length > 0) {
       const e = enemies[Math.floor(Math.random() * enemies.length)];
@@ -246,26 +333,44 @@ function processTurn() {
       showBanner(G, `\u{1F54A}\uFE0F Friedensangebot von ${NATIONS[e].flag}!`, '#00ff9d', 2);
     }
   } else if (eventRoll < 0.18) {
-    const all = G.enemyNations;
-    if (all.length > 0) {
-      const t = all[Math.floor(Math.random() * all.length)];
+    // Border dispute — only with NON-allies
+    const nonAllies = G.enemyNations.filter(k => !G.allies.includes(k));
+    if (nonAllies.length > 0) {
+      const t = nonAllies[Math.floor(Math.random() * nonAllies.length)];
       G.hostility[t] += 15;
       addLog(G, `\u{1F5FA}\uFE0F Grenzstreit mit ${NATIONS[t].flag} ${NATIONS[t].name}! (+15)`, 'y');
     }
-  } else if (eventRoll < 0.22) {
+  } else if (eventRoll < 0.24) {
     const all = G.enemyNations;
     if (all.length > 0) {
       const t = all[Math.floor(Math.random() * all.length)];
       G.hostility[t] = Math.max(0, G.hostility[t] - 10);
       addLog(G, `\u{1F3AD} Kulturaustausch mit ${NATIONS[t].flag}! (-10)`, 'g');
     }
-  } else if (eventRoll < 0.25) {
+  } else if (eventRoll < 0.27) {
+    // Alliance doubt — reduced severity for allies
     if (G.allies.length > 0) {
       const a = G.allies[Math.floor(Math.random() * G.allies.length)];
-      if (G.hostility[a] > 40) {
-        G.hostility[a] += 10;
+      if (G.hostility[a] > 50) {
+        G.hostility[a] += 5;
         addLog(G, `\u26A0\uFE0F ${NATIONS[a].flag} zweifelt am B\u00fcndnis! (${Math.floor(G.hostility[a])}/75 = Verrat)`, 'y');
       }
+    }
+  } else if (eventRoll < 0.32) {
+    // NEW: Ally trade boost event
+    if (G.allies.length > 0) {
+      const a = G.allies[Math.floor(Math.random() * G.allies.length)];
+      const bonus = Math.floor(30 + G.tech);
+      G.money += bonus;
+      addLog(G, `\u{1F4B0} ${NATIONS[a].flag} Handelsabkommen! +${bonus}$`, 'g');
+    }
+  } else if (eventRoll < 0.36) {
+    // NEW: Arms race event — non-allies get stronger
+    const nonAllies = G.enemyNations.filter(k => !G.allies.includes(k));
+    if (nonAllies.length > 0) {
+      const t = nonAllies[Math.floor(Math.random() * nonAllies.length)];
+      const ai = G.ai[t];
+      if (ai) { ai.mil += 5; addLog(G, `\u{1F3AF} ${NATIONS[t].flag} r\u00fcstet auf! +5 Milit\u00e4r`, 'y'); }
     }
   }
 
@@ -405,6 +510,16 @@ cv.addEventListener('click', e => {
       }
       addLog(G, 'Klicke auf eine Nation! (D=Abbruch)', 'y'); return;
     }
+    // Spy mode
+    if (G.spyMode) {
+      for (const k of G.enemyNations) {
+        const pos = MAP_POS[k]; const px = pos.x * W, py = pos.y * H;
+        if (Math.hypot(e.clientX - px, e.clientY - py) < 40) {
+          G.spyMode = false; executeSpyMission(G, k); return;
+        }
+      }
+      addLog(G, 'Klicke auf eine Nation! (X=Abbruch)', 'y'); return;
+    }
     // Attack mode
     if (G.attackMode) {
       for (const k of G.enemyNations) {
@@ -453,15 +568,20 @@ addEventListener('keydown', e => {
     G.selected = '__upgrade';
     return;
   }
+  if (e.key === 'x' || e.key === 'X') {
+    if (G.spies <= 0) { addLog(G, 'Kein Spionage-HQ! Baue erst Spionage-HQs!', 'r'); playAlert(); return; }
+    if (G.spyCooldown > 0) { addLog(G, `Spione auf Mission! (${Math.ceil(G.spyCooldown)}s)`, 'y'); playAlert(); return; }
+    if (G.spyMode) { G.spyMode = false; addLog(G, 'Spionage abgebrochen', 'c'); return; }
+    G.spyMode = true; G.attackMode = false; G.diplomacyMode = false;
+    addLog(G, '\u{1F575}\uFE0F Klicke auf eine Nation f\u00fcr Spionage! (X=Abbruch)', 'p'); playAlert();
+    return;
+  }
+  if (e.key === '6') G.selected = 'spyhq';
   playAlert();
 });
 
 // Setup build bar events
 setupBuildBarEvents(G, addLog, playAlert);
-
-// Import for combat module
-import { playSiren } from './audio.js';
-import { spawnEMP } from './effects.js';
 
 // ====== WEATHER SYSTEM ======
 function updateWeather(G, W, H) {
@@ -512,17 +632,6 @@ function updateWeather(G, W, H) {
         type: 'peace',
       });
     }
-  }
-}
-
-// ====== NUCLEAR WINTER TRACKER ======
-export function registerNuke(G) {
-  G.nukeCount++;
-  if (G.nukeCount >= 3 && !G.nuclearWinter) {
-    G.nuclearWinter = true;
-    addLog(G, '❄️ NUKLEARWINTER! Einkommen -30%, alle Feindseligkeiten steigen!', 'r');
-    showBanner(G, '❄️ NUKLEARWINTER! Die Welt erfriert!', '#88ccff', 5);
-    G.shake = 15; G.flash = 1; G.flashColor = '#88ccff';
   }
 }
 

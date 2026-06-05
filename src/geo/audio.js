@@ -3,6 +3,7 @@ let audioCtx;
 
 export function initAudio() {
   if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return audioCtx;
 }
 
 export function playBoom(v = 0.3) {
@@ -254,4 +255,43 @@ export function updateMusic(G) {
   if (G.musicPlaying && !musicInterval) {
     startMusic(G);
   }
+}
+
+export function playNuclearWinter() {
+  initAudio();
+  const t = audioCtx.currentTime;
+  // Ominous wind sound
+  const o1 = audioCtx.createOscillator(), g1 = audioCtx.createGain();
+  o1.type = 'sawtooth';
+  o1.frequency.setValueAtTime(40, t);
+  o1.frequency.linearRampToValueAtTime(80, t + 1);
+  o1.frequency.linearRampToValueAtTime(30, t + 3);
+  g1.gain.setValueAtTime(0.15, t);
+  g1.gain.exponentialRampToValueAtTime(0.001, t + 3);
+  o1.connect(g1); g1.connect(audioCtx.destination);
+  o1.start(); o1.stop(t + 3);
+  // High whistle
+  const o2 = audioCtx.createOscillator(), g2 = audioCtx.createGain();
+  o2.type = 'sine';
+  o2.frequency.setValueAtTime(1200, t);
+  o2.frequency.exponentialRampToValueAtTime(600, t + 2);
+  g2.gain.setValueAtTime(0.08, t);
+  g2.gain.exponentialRampToValueAtTime(0.001, t + 2.5);
+  o2.connect(g2); g2.connect(audioCtx.destination);
+  o2.start(); o2.stop(t + 2.5);
+}
+
+export function playSpy() {
+  initAudio();
+  const t = audioCtx.currentTime;
+  // Sneaky bleep
+  const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+  o.type = 'sine';
+  o.frequency.setValueAtTime(800, t);
+  o.frequency.linearRampToValueAtTime(1200, t + 0.05);
+  o.frequency.linearRampToValueAtTime(600, t + 0.1);
+  g.gain.setValueAtTime(0.12, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+  o.connect(g); g.connect(audioCtx.destination);
+  o.start(); o.stop(t + 0.15);
 }

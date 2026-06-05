@@ -31,6 +31,7 @@ function aiPickBuild(key, G) {
   const labs = ai.buildings.filter(b => b.type === 'lab').length;
   const defs = ai.buildings.filter(b => b.type === 'defense').length;
   const silos = ai.buildings.filter(b => b.type === 'silo').length;
+  const spyhq = ai.buildings.filter(b => b.type === 'spyhq').length;
 
   switch (ai.personality) {
     case 'aggressive':
@@ -40,6 +41,7 @@ function aiPickBuild(key, G) {
       if (silos < 1 && ai.money >= 150) return 'silo';
       if (mils < 4 && ai.money >= 80) return 'milbase';
       if (defs < 1 && ai.money >= 100) return 'defense';
+      if (spyhq < 1 && ai.money >= 120) return 'spyhq';
       if (labs < 1 && ai.money >= 70) return 'lab';
       if (Math.random() < 0.4) return 'milbase';
       return 'factory';
@@ -55,6 +57,7 @@ function aiPickBuild(key, G) {
     case 'diplomatic':
       if (factories < 3 && ai.money >= 60) return 'factory';
       if (labs < 2 && ai.money >= 70) return 'lab';
+      if (spyhq < 2 && ai.money >= 120) return 'spyhq';
       if (defs < 1 && ai.money >= 100) return 'defense';
       if (mils < 1 && ai.money >= 80) return 'milbase';
       if (factories < 5 && ai.money >= 60) return 'factory';
@@ -73,11 +76,12 @@ function aiPickBuild(key, G) {
       return 'lab';
   }
   const r = Math.random();
-  if (r < 0.4) return 'factory';
-  if (r < 0.65) return 'milbase';
-  if (r < 0.8) return 'lab';
-  if (r < 0.9) return 'defense';
-  return 'silo';
+  if (r < 0.35) return 'factory';
+  if (r < 0.55) return 'milbase';
+  if (r < 0.7) return 'lab';
+  if (r < 0.8) return 'defense';
+  if (r < 0.9) return 'silo';
+  return 'spyhq';
 }
 
 export function aiBuild(key, G, W, H) {
