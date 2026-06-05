@@ -172,6 +172,7 @@ function updateGame(dt) {
 
   // Spies update
   if (G.spyCooldown > 0) G.spyCooldown -= dt;
+  if (G.diplomacyCooldown > 0) G.diplomacyCooldown -= dt;
   G.spies = G.buildings.filter(b => b.type === 'spyhq').reduce((s, b) => s + b.level, 0);
 
   // Trade route pulse animation
@@ -182,12 +183,20 @@ function updateGame(dt) {
 
   // Hostility dynamics (Nuclear Winter increases all)
   const winterHostility = G.nuclearWinter ? 1 : 0;
+  // Alliance fatigue: more allies = more jealousy between them
+  const allyCount = G.allies.length;
+  const allyFatigue = allyCount >= 3 ? 1.5 : allyCount >= 2 ? 0.8 : 0; // extra hostility/s per ally when many allies
   for (const k of G.enemyNations) {
     const isAlly = G.allies.includes(k);
     const baseInc = (isAlly ? 0.1 : 0.8) + winterHostility;
     G.hostility[k] = Math.min(100, G.hostility[k] + baseInc * dt);
   }
-  G.allies.forEach(a => { G.hostility[a] = Math.max(0, G.hostility[a] - 2.5 * dt); });
+  // Alliance fatigue: allies get jealous when you have many
+  G.allies.forEach(a => {
+    const fatigueDrift = allyFatigue * dt;
+    G.hostility[a] = Math.min(100, G.hostility[a] + fatigueDrift);
+    G.hostility[a] = Math.max(0, G.hostility[a] - 2.5 * dt);
+  });
 
   // Nuclear Winter effects
   if (G.nuclearWinter) {
@@ -365,12 +374,55 @@ function processTurn() {
       addLog(G, `\u{1F4B0} ${NATIONS[a].flag} Handelsabkommen! +${bonus}$`, 'g');
     }
   } else if (eventRoll < 0.36) {
-    // NEW: Arms race event — non-allies get stronger
+    // Arms race event — non-allies get stronger
     const nonAllies = G.enemyNations.filter(k => !G.allies.includes(k));
     if (nonAllies.length > 0) {
       const t = nonAllies[Math.floor(Math.random() * nonAllies.length)];
       const ai = G.ai[t];
       if (ai) { ai.mil += 5; addLog(G, `\u{1F3AF} ${NATIONS[t].flag} r\u00fcstet auf! +5 Milit\u00e4r`, 'y'); }
+    }
+  } else if (eventRoll < 0.42) {
+    // TRADE DISPUTE: Allies fight over trade terms (more likely with many allies)
+    if (G.allies.length >= 2) {
+      const a1 = G.allies[Math.floor(Math.random() * G.allies.length)];
+      let a2;
+      do { a2 = G.allies[Math.floor(Math.random() * G.allies.length)]; } while (a2 === a1);
+      G.hostility[a1] += 8;
+      G.hostility[a2] += 6;
+      addLog(G, `\u{1F4E2} Handelsstreit! ${NATIONS[a1].flag} und ${NATIONS[a2].flag} streiten!`, 'y');
+      showBanner(G, `\u{1F4E2} HANDELSSTREIT! ${NATIONS[a1].flag} vs ${NATIONS[a2].flag}`, '#ffb000', 2);
+    } else if (G.allies.length === 1) {
+      const a = G.allies[0];
+      G.hostility[a] += 5;
+      addLog(G, `\u{1F4E2} ${NATIONS[a].flag} ist unzufrieden mit Handelsbedingungen! (+5)`, 'y');
+    }
+  } else if (eventRoll < 0.47) {
+    // ULTIMATUM: A non-ally demands money or gets angry (balance of power)
+    const nonAllies = G.enemyNations.filter(k => !G.allies.includes(k));
+    if (nonAllies.length > 0) {
+      const t = nonAllies[Math.floor(Math.random() * nonAllies.length)];
+      const demand = Math.floor(50 + G.turn * 3 + Math.random() * 30);
+      // Player must pay or face consequences
+      if (G.money >= demand) {
+        G.money -= demand;
+        G.hostility[t] = Math.max(0, G.hostility[t] - 12);
+        addLog(G, `\u{1F4CB} ${NATIONS[t].flag} Ultimatum! ${demand}$ gezahlt (-12)`, 'y');
+      } else {
+        G.hostility[t] = Math.min(100, G.hostility[t] + 20);
+        addLog(G, `\u{1F4CB} ${NATIONS[t].flag} Ultimatum ignoriert! (+20 Feindseligkeit)`, 'r');
+        showBanner(G, `\u26A0\uFE0F ULTIMATUM! ${NATIONS[t].flag} fordert ${demand}$!`, '#ff345d', 2.5);
+      }
+    }
+  } else if (eventRoll < 0.52) {
+    // COUP RISK: Random ally with high hostility gets a coup event
+    if (G.allies.length > 0) {
+      const highHostilityAllies = G.allies.filter(a => G.hostility[a] > 30);
+      if (highHostilityAllies.length > 0) {
+        const a = highHostilityAllies[Math.floor(Math.random() * highHostilityAllies.length)];
+        G.hostility[a] += 12;
+        addLog(G, `\u{1F3F3}\uFE0F Putsch-Gefahr in ${NATIONS[a].flag}! (+12 Feindseligkeit)`, 'r');
+        showBanner(G, `\u{1F3F3}\uFE0F PUTSCH! ${NATIONS[a].flag} instabil!`, '#ff345d', 2);
+      }
     }
   }
 
@@ -483,21 +535,48 @@ cv.addEventListener('click', e => {
       G.selected = 'factory';
       return;
     }
-    // Diplomacy mode
+    // Diplomacy mode (with anti-spam: cooldown, escalating cost, diminishing returns, suspicion)
     if (G.diplomacyMode) {
       for (const k of G.enemyNations) {
         const pos = MAP_POS[k]; const px = pos.x * W, py = pos.y * H;
         if (Math.hypot(e.clientX - px, e.clientY - py) < 40) {
           G.diplomacyMode = false;
           if (k === G.nation) return;
-          G.money -= 20;
-          const reduction = G.allies.includes(k) ? 8 : 18;
+          // Diplomacy cooldown check
+          if (G.diplomacyCooldown > 0) {
+            addLog(G, `Diplomatie-Abklingzeit! (${Math.ceil(G.diplomacyCooldown)}s)`, 'y');
+            playAlert(); return;
+          }
+          // Escalating cost: 20, 34, 52, 74, 100, ...
+          const diploCount = G.diplomacyCount[k] || 0;
+          const diploCost = Math.floor(20 + diploCount * 12 + diploCount * diploCount * 2);
+          if (G.money < diploCost) {
+            addLog(G, `Nicht genug Geld! (${diploCost}$ f\u00fcr ${NATIONS[k].flag})`, 'r');
+            playAlert(); return;
+          }
+          G.money -= diploCost;
+          G.diplomacyCooldown = 8; // 8 second cooldown between diplomacy actions
+          G.diplomacyCount[k] = diploCount + 1;
+          // Diminishing returns: less effective each time
+          const reduction = G.allies.includes(k)
+            ? Math.max(2, Math.floor(8 / (1 + diploCount * 0.5)))
+            : Math.max(2, Math.floor(18 / (1 + diploCount * 0.4)));
           G.hostility[k] = Math.max(0, G.hostility[k] - reduction);
           spawnShockwave(G, px, py, '#00ff9d', 80);
+          // Suspicion: too much diplomacy makes them wary
+          if (diploCount >= 3) {
+            const suspicion = Math.floor(diploCount * 2);
+            G.hostility[k] = Math.min(100, G.hostility[k] + suspicion);
+            addLog(G, `\u{1F575}\uFE0F ${NATIONS[k].flag} wird misstrauisch! (+${suspicion})`, 'y');
+          }
+          // Repeated diplomacy warning
+          if (diploCount >= 2 && diploCount < 5) {
+            addLog(G, `\u26A0\uFE0F ${NATIONS[k].flag} wird resistent gegen Diplomatie...`, 'y');
+          }
           if (G.allies.includes(k)) {
-            addLog(G, `\u{1F91D} ${NATIONS[k].flag} B\u00fcndnis gest\u00e4rkt! (-${reduction} Feindseligkeit)`, 'g');
+            addLog(G, `\u{1F91D} ${NATIONS[k].flag} B\u00fcndnis gest\u00e4rkt! (-${reduction} / ${diploCost}$)`, 'g');
           } else {
-            addLog(G, `\u{1F91D} ${NATIONS[k].flag} Beziehungen verbessert! (-${reduction} Feindseligkeit)`, 'g');
+            addLog(G, `\u{1F91D} ${NATIONS[k].flag} Beziehungen verbessert! (-${reduction} / ${diploCost}$)`, 'g');
             if (G.hostility[k] < 8 && !G.allies.includes(k)) {
               G.allies.push(k);
               addLog(G, `\u{1F91D} ${NATIONS[k].flag} ${NATIONS[k].name} ist jetzt VERB\u00dcNDET!`, 'g');
@@ -550,10 +629,15 @@ addEventListener('keydown', e => {
   if (e.key === '4') G.selected = 'defense';
   if (e.key === '5') G.selected = 'silo';
   if (e.key === 'd' || e.key === 'D') {
-    if (G.money < 20) { addLog(G, 'Nicht genug Geld! (20$ n\u00f6tig)', 'r'); playAlert(); return; }
+    if (G.diplomacyCooldown > 0) { addLog(G, `Diplomatie-Abklingzeit! (${Math.ceil(G.diplomacyCooldown)}s)`, 'y'); playAlert(); return; }
     if (G.diplomacyMode) { G.diplomacyMode = false; addLog(G, 'Diplomatie abgebrochen', 'c'); return; }
     G.diplomacyMode = true; G.attackMode = false;
-    addLog(G, '\u{1F91D} Klicke auf eine Nation f\u00fcr Diplomatie! (-20$)', 'g'); playAlert();
+    // Show current costs per nation
+    const costHints = G.enemyNations.map(k => {
+      const c = G.diplomacyCount[k] || 0;
+      return `${NATIONS[k].flag}${Math.floor(20 + c * 12 + c * c * 2)}$`;
+    }).join(' ');
+    addLog(G, `\u{1F91D} Klicke auf eine Nation f\u00fcr Diplomatie! [${costHints}]`, 'g'); playAlert();
     return;
   }
   if (e.key === 'k' || e.key === 'K') {

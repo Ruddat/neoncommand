@@ -71,6 +71,10 @@ export function createState() {
     spyTargets: [],
     // Trade route animation
     tradePulse: 0,
+    // Diplomacy anti-spam
+    diplomacyCooldown: 0,
+    diplomacyCount: {},
+    lastDiploTarget: null,
   };
 }
 
@@ -117,6 +121,9 @@ export function selectNation(G, key) {
   G.spyCooldown = 0;
   G.spyTargets = [];
   G.tradePulse = 0;
+  G.diplomacyCooldown = 0;
+  G.diplomacyCount = {};
+  G.lastDiploTarget = null;
 
   for (const k of Object.keys(NATIONS)) {
     if (k !== key) G.ai[k] = createAIState(k);

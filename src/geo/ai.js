@@ -170,13 +170,23 @@ export function updateAI(key, G, dt, W, H) {
   ai.defense = n.mil + defTotal;
   ai.offense = siloTotal;
 
+  // Balance of Power: non-allied AI builds faster when player has many allies
+  const isAlly = G.allies.includes(key);
+  let buildSpeedMultiplier = 1;
+  if (!isAlly) {
+    const playerAllyCount = G.allies.length;
+    if (playerAllyCount >= 3) buildSpeedMultiplier = 1.8; // 80% faster build
+    else if (playerAllyCount >= 2) buildSpeedMultiplier = 1.4; // 40% faster build
+  }
+
   ai.buildTimer += dt;
   const moneyBoost = ai.money > 500 ? 0.7 : ai.money > 300 ? 0.85 : 1;
-  const buildInterval = 7 / ai.buildRate * moneyBoost;
+  const buildInterval = (7 / ai.buildRate * moneyBoost) / buildSpeedMultiplier;
   if (ai.buildTimer >= buildInterval) { ai.buildTimer = 0; aiBuild(key, G, W, H); }
 
   ai.upgradeTimer += dt;
-  if (ai.upgradeTimer >= ai.upgradeCooldown && ai.buildings.length >= 3) { ai.upgradeTimer = 0; aiUpgrade(key, G); }
+  const upgradeSpeed = isAlly ? 1 : buildSpeedMultiplier;
+  if (ai.upgradeTimer >= ai.upgradeCooldown / upgradeSpeed && ai.buildings.length >= 3) { ai.upgradeTimer = 0; aiUpgrade(key, G); }
 }
 
 import { MAP_POS } from './data.js';
