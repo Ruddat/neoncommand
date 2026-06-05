@@ -3,7 +3,7 @@ import { NATIONS, ALLY_MAP, WIN_ROUNDS } from './data.js';
 
 export function createState() {
   return {
-    mode: 'menu',
+    mode: 'title',
     nation: null,
     lastT: 0,
     selected: 'factory',

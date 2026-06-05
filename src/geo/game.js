@@ -4,7 +4,7 @@ import { createState, selectNation } from './state.js';
 import { rnd, burst, floatText, addLog, scheduleEvent, processScheduledEvents, clearScheduledEvents } from './helpers.js';
 import { spawnShockwave, spawnMushroom, spawnSmoke, spawnEMP, showBanner, calcDefcon, updateDefconDisplay } from './effects.js';
 import { updateAI } from './ai.js';
-import { drawCountrySelect, drawWorldMap, drawGameOver, drawVictory } from './renderer.js';
+import { drawTitleScreen, drawCountrySelect, drawWorldMap, drawGameOver, drawVictory } from './renderer.js';
 import { launchAttack, counterAttack, aiVsAiAttack, setDimensions } from './combat.js';
 import { drawHUD, drawIntel, drawBuildBar, setupBuildBarEvents } from './ui.js';
 import { initAudio, playBuild, playAlert, playBoom, playSiren, playVictory as playVictorySound, startMusic, stopMusic, updateMusic } from './audio.js';
@@ -464,7 +464,8 @@ function processTurn() {
 function draw() {
   cx.save();
   if (G.shake > 0) cx.translate((Math.random() - 0.5) * G.shake, (Math.random() - 0.5) * G.shake);
-  if (G.mode === 'menu') drawCountrySelect(cx, G, W, H);
+  if (G.mode === 'title') drawTitleScreen(cx, G, W, H);
+  else if (G.mode === 'menu') drawCountrySelect(cx, G, W, H);
   else if (G.mode === 'playing') drawWorldMap(cx, G, W, H, canBuild);
   else if (G.mode === 'gameover') { drawWorldMap(cx, G, W, H, canBuild); drawGameOver(cx, G, W, H); }
   else if (G.mode === 'victory') { drawWorldMap(cx, G, W, H, canBuild); drawVictory(cx, G, W, H); }
@@ -508,6 +509,11 @@ cv.addEventListener('mousemove', e => { G.mouseX = e.clientX; G.mouseY = e.clien
 
 cv.addEventListener('click', e => {
   initAudio();
+  // Title screen: any click transitions to menu
+  if (G.mode === 'title') {
+    G.mode = 'menu';
+    return;
+  }
   if (G.mode === 'menu') {
     const keys = Object.keys(NATIONS);
     const cardW = 150, cardH = 190, gap = 14;
@@ -617,6 +623,11 @@ cv.addEventListener('click', e => {
 
 addEventListener('keydown', e => {
   initAudio();
+  // Title screen: any key transitions to menu
+  if (G.mode === 'title') {
+    G.mode = 'menu';
+    return;
+  }
   if (e.key === 'r' || e.key === 'R') {
     stopMusic(G);
     G = createState();

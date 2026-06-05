@@ -6,54 +6,239 @@ import {
   drawScanlines, drawScreenCrack,
 } from './effects.js';
 
-// ====== DRAW: SINGLE BUILDING ======
+// ====== TITLE SCREEN IMAGE ======
+let titleImg = null;
+let titleImgLoaded = false;
+try {
+  titleImg = new Image();
+  titleImg.onload = () => { titleImgLoaded = true; };
+  titleImg.onerror = () => { titleImgLoaded = false; };
+  titleImg.src = '/img/startscreen.png';
+} catch (e) { titleImgLoaded = false; }
+
+// ====== DRAW: TITLE SCREEN ======
+export function drawTitleScreen(cx, G, W, H) {
+  const t = Date.now() * 0.001;
+
+  // Dark background
+  cx.fillStyle = '#040714';
+  cx.fillRect(0, 0, W, H);
+
+  // Draw startscreen image if loaded, cover-style
+  if (titleImgLoaded && titleImg) {
+    const imgAspect = titleImg.width / titleImg.height;
+    const canAspect = W / H;
+    let dw, dh, dx, dy;
+    if (canAspect > imgAspect) {
+      dw = W; dh = W / imgAspect; dx = 0; dy = (H - dh) / 2;
+    } else {
+      dh = H; dw = H * imgAspect; dy = 0; dx = (W - dw) / 2;
+    }
+    cx.save();
+    cx.globalAlpha = 0.85;
+    cx.drawImage(titleImg, dx, dy, dw, dh);
+    cx.restore();
+
+    // Dark overlay at bottom for text readability
+    const overlayGrad = cx.createLinearGradient(0, H * 0.6, 0, H);
+    overlayGrad.addColorStop(0, 'rgba(4,7,20,0)');
+    overlayGrad.addColorStop(0.5, 'rgba(4,7,20,0.6)');
+    overlayGrad.addColorStop(1, 'rgba(4,7,20,0.92)');
+    cx.fillStyle = overlayGrad;
+    cx.fillRect(0, 0, W, H);
+
+    // Dark overlay at top
+    const topGrad = cx.createLinearGradient(0, 0, 0, H * 0.25);
+    topGrad.addColorStop(0, 'rgba(4,7,20,0.5)');
+    topGrad.addColorStop(1, 'rgba(4,7,20,0)');
+    cx.fillStyle = topGrad;
+    cx.fillRect(0, 0, W, H * 0.25);
+  } else {
+    // Fallback: animated neon grid
+    cx.save();
+    cx.strokeStyle = 'rgba(0,217,255,.03)';
+    cx.lineWidth = 1;
+    const gridOffset = (t * 10) % 60;
+    for (let x = -60 + gridOffset; x < W + 60; x += 60) { cx.beginPath(); cx.moveTo(x, 0); cx.lineTo(x, H); cx.stroke(); }
+    for (let y = -60 + gridOffset; y < H + 60; y += 60) { cx.beginPath(); cx.moveTo(0, y); cx.lineTo(W, y); cx.stroke(); }
+    cx.restore();
+
+    // Title text fallback
+    cx.textAlign = 'center';
+    cx.save(); cx.shadowColor = '#00d9ff'; cx.shadowBlur = 40;
+    cx.fillStyle = '#00d9ff'; cx.font = '900 72px Orbitron, Arial'; cx.fillText('NEON COMMAND', W / 2, H * 0.35);
+    cx.restore();
+    cx.save(); cx.shadowColor = '#ff2bd6'; cx.shadowBlur = 25;
+    cx.fillStyle = '#ff2bd6'; cx.font = '900 36px Orbitron, Arial'; cx.fillText('GEOPOLITIK', W / 2, H * 0.35 + 50);
+    cx.restore();
+  }
+
+  // Animated neon border frame
+  cx.save();
+  const borderPulse = 0.3 + 0.2 * Math.sin(t * 1.5);
+  cx.strokeStyle = `rgba(0,217,255,${borderPulse})`;
+  cx.lineWidth = 1;
+  const margin = 20;
+  cx.strokeRect(margin, margin, W - margin * 2, H - margin * 2);
+  // Corner accents
+  const cornerLen = 40;
+  cx.strokeStyle = `rgba(0,217,255,${0.5 + 0.3 * Math.sin(t * 2)})`;
+  cx.lineWidth = 2;
+  // Top-left
+  cx.beginPath(); cx.moveTo(margin, margin + cornerLen); cx.lineTo(margin, margin); cx.lineTo(margin + cornerLen, margin); cx.stroke();
+  // Top-right
+  cx.beginPath(); cx.moveTo(W - margin - cornerLen, margin); cx.lineTo(W - margin, margin); cx.lineTo(W - margin, margin + cornerLen); cx.stroke();
+  // Bottom-left
+  cx.beginPath(); cx.moveTo(margin, H - margin - cornerLen); cx.lineTo(margin, H - margin); cx.lineTo(margin + cornerLen, H - margin); cx.stroke();
+  // Bottom-right
+  cx.beginPath(); cx.moveTo(W - margin - cornerLen, H - margin); cx.lineTo(W - margin, H - margin); cx.lineTo(W - margin, H - margin - cornerLen); cx.stroke();
+  cx.restore();
+
+  // Floating particles
+  cx.save();
+  for (let i = 0; i < 40; i++) {
+    const px = ((i * 137.5 + t * 8) % (W + 40)) - 20;
+    const py = ((i * 97.3 + t * (3 + i * 0.3)) % (H + 40)) - 20;
+    cx.globalAlpha = 0.08 + 0.08 * Math.sin(t + i);
+    cx.fillStyle = i % 3 === 0 ? '#00d9ff' : i % 3 === 1 ? '#ff2bd6' : '#7d5cff';
+    cx.beginPath(); cx.arc(px, py, 1 + (i % 3), 0, 7); cx.fill();
+  }
+  cx.restore();
+
+  // Horizontal neon line
+  cx.save();
+  const lineY = H * 0.72;
+  const lineGrad = cx.createLinearGradient(0, 0, W, 0);
+  lineGrad.addColorStop(0, 'rgba(0,217,255,0)');
+  lineGrad.addColorStop(0.3, 'rgba(0,217,255,.3)');
+  lineGrad.addColorStop(0.5, 'rgba(0,217,255,.5)');
+  lineGrad.addColorStop(0.7, 'rgba(0,217,255,.3)');
+  lineGrad.addColorStop(1, 'rgba(0,217,255,0)');
+  cx.strokeStyle = lineGrad; cx.lineWidth = 1;
+  cx.beginPath(); cx.moveTo(0, lineY); cx.lineTo(W, lineY); cx.stroke();
+  cx.restore();
+
+  // Title overlay text (on top of image)
+  cx.textAlign = 'center';
+  cx.save(); cx.shadowColor = '#00d9ff'; cx.shadowBlur = 30;
+  cx.fillStyle = '#00d9ff'; cx.font = '900 48px Orbitron, Arial';
+  cx.fillText('NEON COMMAND', W / 2, H * 0.76);
+  cx.restore();
+  cx.save(); cx.shadowColor = '#ff2bd6'; cx.shadowBlur = 20;
+  cx.fillStyle = '#ff2bd6'; cx.font = '900 24px Orbitron, Arial';
+  cx.fillText('GEOPOLITIK', W / 2, H * 0.76 + 36);
+  cx.restore();
+
+  // Tagline
+  cx.fillStyle = '#667'; cx.font = '12px "Share Tech Mono", Arial';
+  cx.fillText('Strategie · Diplomatie · Nuklearkrieg · Weltherrschaft', W / 2, H * 0.76 + 60);
+
+  // Pulsing "Press any key" prompt
+  const promptAlpha = 0.4 + 0.6 * Math.abs(Math.sin(t * 2));
+  cx.save(); cx.globalAlpha = promptAlpha;
+  cx.shadowColor = '#00d9ff'; cx.shadowBlur = 15;
+  cx.fillStyle = '#00d9ff'; cx.font = '900 18px Orbitron, Arial';
+  cx.fillText('[ DRÜCKE EINE TASTE ]', W / 2, H * 0.91);
+  cx.restore();
+
+  // Controls hint
+  cx.fillStyle = '#444'; cx.font = '10px "Share Tech Mono", Arial';
+  cx.fillText('1-6 Bauen · D Diplomatie · K Angriff · X Spionage · U Upgrade · M Musik · R Neustart', W / 2, H * 0.95);
+
+  cx.textAlign = 'left';
+}
+
+// ====== DRAW: SINGLE BUILDING (PIMPED) ======
 export function drawBuilding(cx, b, alpha = 1, nationColor = null) {
   const spec = BLDS[b.type]; if (!spec) return;
   const age = b.builtAt ? Math.min(1, (Date.now() - b.builtAt) / 500) : 1;
-  const pulse = 1 + Math.sin(Date.now() * 0.003 + b.x) * 0.1;
+  const pulse = 1 + Math.sin(Date.now() * 0.003 + b.x) * 0.08;
   const levelScale = 1 + (b.level - 1) * 0.12;
+  const col = nationColor || spec.color;
   cx.save();
-  cx.shadowColor = nationColor || spec.color;
-  cx.shadowBlur = (8 * pulse + (b.level - 1) * 4) * age;
-  cx.fillStyle = nationColor || spec.color;
+  cx.shadowColor = col;
+  cx.shadowBlur = (10 * pulse + (b.level - 1) * 5) * age;
+  cx.fillStyle = col;
   cx.globalAlpha = alpha * age * 0.9;
   const s = levelScale * age;
   cx.translate(b.x, b.y); cx.scale(s, s);
   if (b.type === 'factory') {
-    cx.fillRect(-9, -9, 18, 18); cx.fillStyle = '#000'; cx.font = 'bold 11px Arial'; cx.textAlign = 'center'; cx.fillText('$', 0, 4);
-    if (b.level > 1) { cx.fillStyle = spec.color; cx.font = 'bold 7px Arial'; cx.fillText(b.level, 7, -6); }
+    // Factory: rounded square with gradient fill
+    const fg = cx.createLinearGradient(-9, -9, 9, 9);
+    fg.addColorStop(0, col); fg.addColorStop(1, col + 'aa');
+    cx.fillStyle = fg;
+    cx.beginPath();
+    cx.moveTo(-7, -9); cx.lineTo(7, -9); cx.quadraticCurveTo(9, -9, 9, -7);
+    cx.lineTo(9, 7); cx.quadraticCurveTo(9, 9, 7, 9);
+    cx.lineTo(-7, 9); cx.quadraticCurveTo(-9, 9, -9, 7);
+    cx.lineTo(-9, -7); cx.quadraticCurveTo(-9, -9, -7, -9);
+    cx.closePath(); cx.fill();
+    cx.fillStyle = '#000'; cx.font = 'bold 11px Arial'; cx.textAlign = 'center'; cx.fillText('$', 0, 4);
+    if (b.level > 1) { cx.fillStyle = '#fff'; cx.font = 'bold 7px Arial'; cx.fillText('L' + b.level, 7, -6); }
   } else if (b.type === 'milbase') {
-    cx.beginPath(); cx.moveTo(0, -12); cx.lineTo(11, 8); cx.lineTo(-11, 8); cx.closePath(); cx.fill();
-    cx.fillStyle = '#000'; cx.font = '9px Arial'; cx.textAlign = 'center'; cx.fillText('M', 0, 4);
-    if (b.level > 1) { cx.fillStyle = spec.color; cx.font = 'bold 7px Arial'; cx.fillText(b.level, 7, -6); }
+    // Military: sharp triangle with gradient
+    const mg = cx.createLinearGradient(0, -12, 0, 8);
+    mg.addColorStop(0, col); mg.addColorStop(1, col + '88');
+    cx.fillStyle = mg;
+    cx.beginPath(); cx.moveTo(0, -13); cx.lineTo(12, 9); cx.lineTo(-12, 9); cx.closePath(); cx.fill();
+    cx.fillStyle = '#000'; cx.font = 'bold 9px Arial'; cx.textAlign = 'center'; cx.fillText('M', 0, 4);
+    if (b.level > 1) { cx.fillStyle = '#fff'; cx.font = 'bold 7px Arial'; cx.fillText('L' + b.level, 8, -6); }
+    // Small shield ring
+    cx.globalAlpha = alpha * age * 0.15; cx.strokeStyle = col; cx.lineWidth = 1;
+    cx.beginPath(); cx.arc(0, 0, 15, 0, 7); cx.stroke();
   } else if (b.type === 'lab') {
-    cx.beginPath(); cx.moveTo(0, -11); cx.lineTo(9, 0); cx.lineTo(0, 11); cx.lineTo(-9, 0); cx.closePath(); cx.fill();
-    cx.fillStyle = '#000'; cx.font = '9px Arial'; cx.textAlign = 'center'; cx.fillText('T', 0, 4);
-    if (b.level > 1) { cx.fillStyle = spec.color; cx.font = 'bold 7px Arial'; cx.fillText(b.level, 7, -6); }
+    // Lab: diamond with gradient
+    const lg = cx.createRadialGradient(0, 0, 0, 0, 0, 12);
+    lg.addColorStop(0, '#ffffff44'); lg.addColorStop(0.5, col); lg.addColorStop(1, col + '88');
+    cx.fillStyle = lg;
+    cx.beginPath(); cx.moveTo(0, -12); cx.lineTo(10, 0); cx.lineTo(0, 12); cx.lineTo(-10, 0); cx.closePath(); cx.fill();
+    cx.fillStyle = '#000'; cx.font = 'bold 9px Arial'; cx.textAlign = 'center'; cx.fillText('T', 0, 4);
+    if (b.level > 1) { cx.fillStyle = '#fff'; cx.font = 'bold 7px Arial'; cx.fillText('L' + b.level, 7, -7); }
   } else if (b.type === 'defense') {
-    cx.beginPath(); cx.arc(0, 0, 11, 0, 7); cx.fill();
+    // Defense: circle with radial gradient + shield ring
+    const dg = cx.createRadialGradient(0, -3, 0, 0, 0, 12);
+    dg.addColorStop(0, '#ffffff33'); dg.addColorStop(0.5, col); dg.addColorStop(1, col + 'aa');
+    cx.fillStyle = dg;
+    cx.beginPath(); cx.arc(0, 0, 12, 0, 7); cx.fill();
     cx.fillStyle = '#000'; cx.font = 'bold 9px Arial'; cx.textAlign = 'center'; cx.fillText('D', 0, 3);
-    if (b.level > 1) { cx.fillStyle = spec.color; cx.font = 'bold 7px Arial'; cx.fillText(b.level, 7, -6); }
-    cx.strokeStyle = nationColor || spec.color; cx.lineWidth = 1 + b.level; cx.globalAlpha = alpha * age * 0.3;
-    cx.beginPath(); cx.arc(0, 0, 14 + b.level * 2, 0, 7); cx.stroke();
+    if (b.level > 1) { cx.fillStyle = '#fff'; cx.font = 'bold 7px Arial'; cx.fillText('L' + b.level, 8, -7); }
+    cx.strokeStyle = col; cx.lineWidth = 1 + b.level * 0.5; cx.globalAlpha = alpha * age * 0.25;
+    cx.beginPath(); cx.arc(0, 0, 15 + b.level * 2, 0, 7); cx.stroke();
+    // Second ring for level 3
+    if (b.level >= 3) { cx.globalAlpha = alpha * age * 0.12; cx.beginPath(); cx.arc(0, 0, 22, 0, 7); cx.stroke(); }
   } else if (b.type === 'silo') {
-    cx.fillRect(-5, -12, 10, 24); cx.fillStyle = '#000'; cx.font = '9px Arial'; cx.textAlign = 'center'; cx.fillText('R', 0, 3);
-    if (b.level > 1) { cx.fillStyle = spec.color; cx.font = 'bold 7px Arial'; cx.fillText(b.level, 5, -8); }
+    // Silo: tall rect with gradient + missile tip
+    const sg = cx.createLinearGradient(-5, -12, 5, 12);
+    sg.addColorStop(0, col + 'cc'); sg.addColorStop(0.5, col); sg.addColorStop(1, col + '99');
+    cx.fillStyle = sg;
+    cx.fillRect(-6, -13, 12, 26);
+    // Missile tip
+    cx.fillStyle = '#ffb000';
+    cx.beginPath(); cx.moveTo(0, -17); cx.lineTo(4, -13); cx.lineTo(-4, -13); cx.closePath(); cx.fill();
+    cx.fillStyle = '#000'; cx.font = 'bold 9px Arial'; cx.textAlign = 'center'; cx.fillText('R', 0, 4);
+    if (b.level > 1) { cx.fillStyle = '#fff'; cx.font = 'bold 7px Arial'; cx.fillText('L' + b.level, 6, -8); }
   } else if (b.type === 'spyhq') {
-    // Spy HQ: hexagon shape with eye symbol
+    // Spy HQ: hexagon with radial gradient + pulsing rings
+    const spg = cx.createRadialGradient(0, 0, 0, 0, 0, 12);
+    spg.addColorStop(0, '#ffffff33'); spg.addColorStop(0.5, col); spg.addColorStop(1, col + '99');
+    cx.fillStyle = spg;
     cx.beginPath();
     for (let i = 0; i < 6; i++) {
       const a = i * Math.PI / 3 - Math.PI / 6;
-      const r = 11;
+      const r = 12;
       cx[i === 0 ? 'moveTo' : 'lineTo'](Math.cos(a) * r, Math.sin(a) * r);
     }
     cx.closePath(); cx.fill();
     cx.fillStyle = '#000'; cx.font = 'bold 9px Arial'; cx.textAlign = 'center'; cx.fillText('S', 0, 3);
-    if (b.level > 1) { cx.fillStyle = spec.color; cx.font = 'bold 7px Arial'; cx.fillText(b.level, 7, -8); }
+    if (b.level > 1) { cx.fillStyle = '#fff'; cx.font = 'bold 7px Arial'; cx.fillText('L' + b.level, 8, -8); }
     // Pulsing detection ring
-    const pulseR = 16 + b.level * 3 + Math.sin(Date.now() * 0.004 + b.x) * 3;
-    cx.globalAlpha = alpha * age * 0.2; cx.strokeStyle = spec.color; cx.lineWidth = 1;
+    const pulseR = 17 + b.level * 3 + Math.sin(Date.now() * 0.004 + b.x) * 3;
+    cx.globalAlpha = alpha * age * 0.2; cx.strokeStyle = col; cx.lineWidth = 1;
     cx.beginPath(); cx.arc(0, 0, pulseR, 0, 7); cx.stroke();
+    // Second scan ring
+    const scanR = 24 + b.level * 4 + Math.sin(Date.now() * 0.003 + b.y) * 4;
+    cx.globalAlpha = alpha * age * 0.08;
+    cx.beginPath(); cx.arc(0, 0, scanR, 0, 7); cx.stroke();
   }
   cx.textAlign = 'left'; cx.globalAlpha = 1; cx.restore();
 }
