@@ -1,10 +1,142 @@
-// ====== AUDIO SYSTEM (Web Audio API - Synthesized) ======
+// ====== AUDIO SYSTEM (Web Audio API + MP3 Background Music) ======
 let audioCtx;
 
 export function initAudio() {
   if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   return audioCtx;
 }
+
+// ====== MP3 BACKGROUND MUSIC SYSTEM ======
+// Track mapping by DEFCON level:
+//   DEFCON 5 (Frieden) → Defcon Ice Room.mp3   — atmospheric, cold
+//   DEFCON 3-4 (Wachsam/Erhöht) → Red Alert At Dawn.mp3 — tension building
+//   DEFCON 1-2 (Kritisch/Atomkrieg) → Fallout Protocol.mp3 — full dread
+
+const TRACKS = {
+  peace: { src: '/audio/Defcon Ice Room.mp3', defconRange: [4, 5] },
+  tension: { src: '/audio/Red Alert At Dawn.mp3', defconRange: [3, 3] },
+  war: { src: '/audio/Fallout Protocol.mp3', defconRange: [1, 2] },
+};
+
+let currentTrack = null; // 'peace' | 'tension' | 'war'
+let audioElement = null;
+let musicVolume = 0.35;
+let fadeInterval = null;
+
+export function startMusic(G) {
+  if (G.musicPlaying) return;
+  G.musicPlaying = true;
+
+  // Create audio element
+  if (!audioElement) {
+    audioElement = new Audio();
+    audioElement.loop = true;
+    audioElement.volume = 0; // start silent, fade in
+  }
+
+  // Start with the right track for current DEFCON
+  const track = getTrackForDefcon(G.defcon || 5);
+  switchTrack(track, true);
+}
+
+export function stopMusic(G) {
+  if (!G.musicPlaying) return;
+  G.musicPlaying = false;
+
+  if (audioElement) {
+    // Fade out
+    fadeAudio(audioElement, audioElement.volume, 0, 1.5, () => {
+      audioElement.pause();
+    });
+  }
+  if (fadeInterval) { clearInterval(fadeInterval); fadeInterval = null; }
+}
+
+function getTrackForDefcon(defcon) {
+  if (defcon <= 2) return 'war';
+  if (defcon <= 3) return 'tension';
+  return 'peace';
+}
+
+function switchTrack(trackKey, initial = false) {
+  if (trackKey === currentTrack && !initial) return;
+  if (!audioElement) return;
+
+  const track = TRACKS[trackKey];
+  if (!track) return;
+
+  const wasPlaying = !audioElement.paused;
+  const oldVolume = audioElement.volume;
+
+  if (wasPlaying && !initial) {
+    // Crossfade: fade out old, then start new
+    fadeAudio(audioElement, oldVolume, 0, 1.5, () => {
+      audioElement.src = track.src;
+      audioElement.volume = 0;
+      audioElement.play().catch(() => {});
+      fadeAudio(audioElement, 0, musicVolume, 2);
+    });
+  } else {
+    // Start fresh
+    audioElement.src = track.src;
+    audioElement.volume = initial ? 0 : musicVolume;
+    audioElement.play().catch(() => {});
+    if (initial) {
+      fadeAudio(audioElement, 0, musicVolume, 2);
+    }
+  }
+
+  currentTrack = trackKey;
+}
+
+function fadeAudio(el, from, to, duration, callback) {
+  if (fadeInterval) clearInterval(fadeInterval);
+  const steps = 30;
+  const stepTime = (duration * 1000) / steps;
+  let step = 0;
+  el.volume = from;
+
+  fadeInterval = setInterval(() => {
+    step++;
+    const progress = step / steps;
+    el.volume = from + (to - from) * progress;
+    if (step >= steps) {
+      clearInterval(fadeInterval);
+      fadeInterval = null;
+      el.volume = to;
+      if (callback) callback();
+    }
+  }, stepTime);
+}
+
+export function updateMusic(G) {
+  if (!G.musicPlaying) return;
+
+  // Ensure audio element is playing
+  if (audioElement && audioElement.paused) {
+    audioElement.play().catch(() => {});
+  }
+
+  // Switch track based on DEFCON
+  const targetTrack = getTrackForDefcon(G.defcon || 5);
+  if (targetTrack !== currentTrack) {
+    switchTrack(targetTrack);
+  }
+
+  // Adjust volume based on DEFCON (louder when more intense)
+  const targetVolume = G.defcon <= 2 ? 0.45 : G.defcon <= 3 ? 0.38 : 0.3;
+  if (audioElement && Math.abs(audioElement.volume - targetVolume) > 0.05) {
+    // Smoothly adjust
+    audioElement.volume += (targetVolume - audioElement.volume) * 0.1;
+  }
+}
+
+export function setMusicVolume(v) {
+  musicVolume = Math.max(0, Math.min(1, v));
+  if (audioElement) audioElement.volume = musicVolume;
+}
+
+// ====== SYNTHESIZED SOUND EFFECTS ======
 
 export function playBoom(v = 0.3) {
   initAudio();
@@ -147,7 +279,6 @@ export function playDramatic() {
 export function playVictory() {
   initAudio();
   const t = audioCtx.currentTime;
-  // Ascending arpeggio
   const notes = [523, 659, 784, 1047]; // C5, E5, G5, C6
   notes.forEach((freq, i) => {
     const o = audioCtx.createOscillator(), g = audioCtx.createGain();
@@ -160,107 +291,9 @@ export function playVictory() {
   });
 }
 
-// ====== BACKGROUND MUSIC SYSTEM ======
-// Procedural darkwave synth that adapts to DEFCON level
-let musicInterval = null;
-let currentDefconForMusic = 5;
-
-export function startMusic(G) {
-  if (G.musicPlaying) return;
-  G.musicPlaying = true;
-
-  // Create a master gain for the music
-  if (!G.musicGain) {
-    const ctx = initAudio();
-    G.musicGain = ctx.createGain();
-    G.musicGain.gain.value = 0.06; // Quiet background
-    G.musicGain.connect(ctx.destination);
-  }
-
-  // Play a procedural beat loop
-  playMusicBeat(G);
-  musicInterval = setInterval(() => {
-    if (G.mode === 'playing' && G.musicPlaying) {
-      playMusicBeat(G);
-    }
-  }, 2000);
-}
-
-function playMusicBeat(G) {
-  if (!G.musicGain || !audioCtx) return;
-  const t = audioCtx.currentTime;
-  const dc = G.defcon || 5;
-  currentDefconForMusic = dc;
-
-  // Bass drone — always present, pitch drops with tension
-  const bassFreq = dc <= 2 ? 40 : dc <= 3 ? 50 : dc <= 4 ? 60 : 70;
-  const bass = audioCtx.createOscillator();
-  const bassGain = audioCtx.createGain();
-  bass.type = 'sawtooth';
-  bass.frequency.setValueAtTime(bassFreq, t);
-  bassGain.gain.setValueAtTime(0.15, t);
-  bassGain.gain.exponentialRampToValueAtTime(0.001, t + 1.8);
-  bass.connect(bassGain); bassGain.connect(G.musicGain);
-  bass.start(); bass.stop(t + 1.8);
-
-  // Sub-bass pulse — more present at higher DEFCON
-  if (dc <= 3) {
-    const sub = audioCtx.createOscillator();
-    const subGain = audioCtx.createGain();
-    sub.type = 'sine';
-    sub.frequency.setValueAtTime(bassFreq / 2, t);
-    subGain.gain.setValueAtTime(0.2, t);
-    subGain.gain.exponentialRampToValueAtTime(0.001, t + 2.5);
-    sub.connect(subGain); subGain.connect(G.musicGain);
-    sub.start(); sub.stop(t + 2.5);
-  }
-
-  // Rhythmic clicks/hats — speed increases with tension
-  const clickCount = dc <= 1 ? 8 : dc <= 2 ? 6 : dc <= 3 ? 4 : 2;
-  const clickDelay = dc <= 1 ? 0.2 : dc <= 2 ? 0.3 : dc <= 3 ? 0.45 : 0.8;
-  for (let i = 0; i < clickCount; i++) {
-    const click = audioCtx.createOscillator();
-    const clickGain = audioCtx.createGain();
-    click.type = 'square';
-    click.frequency.setValueAtTime(800 + Math.random() * 400, t + i * clickDelay);
-    clickGain.gain.setValueAtTime(0.03, t + i * clickDelay);
-    clickGain.gain.exponentialRampToValueAtTime(0.001, t + i * clickDelay + 0.05);
-    click.connect(clickGain); clickGain.connect(G.musicGain);
-    click.start(t + i * clickDelay); click.stop(t + i * clickDelay + 0.05);
-  }
-
-  // Pad chord — dark at low DEFCON, brighter at peace
-  if (Math.random() < (dc <= 2 ? 0.8 : dc <= 4 ? 0.4 : 0.2)) {
-    const padNotes = dc <= 2
-      ? [130.81, 155.56, 196] // Cm: C, Eb, G — dark
-      : dc <= 4
-        ? [146.83, 174.61, 220] // Dm: D, F, A — tense
-        : [164.81, 196, 246.94]; // E: E, G#, B — bright
-    padNotes.forEach(freq => {
-      const pad = audioCtx.createOscillator();
-      const padGain = audioCtx.createGain();
-      pad.type = 'sine';
-      pad.frequency.setValueAtTime(freq, t);
-      padGain.gain.setValueAtTime(0.05, t);
-      padGain.gain.exponentialRampToValueAtTime(0.001, t + 1.5);
-      pad.connect(padGain); padGain.connect(G.musicGain);
-      pad.start(); pad.stop(t + 1.5);
-    });
-  }
-}
-
-export function updateMusic(G) {
-  // Music intensity adapts automatically via DEFCON in playMusicBeat
-  // Just make sure it's running
-  if (G.musicPlaying && !musicInterval) {
-    startMusic(G);
-  }
-}
-
 export function playNuclearWinter() {
   initAudio();
   const t = audioCtx.currentTime;
-  // Ominous wind sound
   const o1 = audioCtx.createOscillator(), g1 = audioCtx.createGain();
   o1.type = 'sawtooth';
   o1.frequency.setValueAtTime(40, t);
@@ -270,7 +303,6 @@ export function playNuclearWinter() {
   g1.gain.exponentialRampToValueAtTime(0.001, t + 3);
   o1.connect(g1); g1.connect(audioCtx.destination);
   o1.start(); o1.stop(t + 3);
-  // High whistle
   const o2 = audioCtx.createOscillator(), g2 = audioCtx.createGain();
   o2.type = 'sine';
   o2.frequency.setValueAtTime(1200, t);
@@ -284,7 +316,6 @@ export function playNuclearWinter() {
 export function playSpy() {
   initAudio();
   const t = audioCtx.currentTime;
-  // Sneaky bleep
   const o = audioCtx.createOscillator(), g = audioCtx.createGain();
   o.type = 'sine';
   o.frequency.setValueAtTime(800, t);

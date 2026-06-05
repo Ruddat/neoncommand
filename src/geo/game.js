@@ -7,7 +7,7 @@ import { updateAI } from './ai.js';
 import { drawCountrySelect, drawWorldMap, drawGameOver, drawVictory } from './renderer.js';
 import { launchAttack, counterAttack, aiVsAiAttack, setDimensions } from './combat.js';
 import { drawHUD, drawIntel, drawBuildBar, setupBuildBarEvents } from './ui.js';
-import { initAudio, playBuild, playAlert, playBoom, playSiren, playVictory as playVictorySound, startMusic, updateMusic } from './audio.js';
+import { initAudio, playBuild, playAlert, playBoom, playSiren, playVictory as playVictorySound, startMusic, stopMusic, updateMusic } from './audio.js';
 
 // ====== CANVAS SETUP ======
 const cv = document.getElementById('gc');
@@ -539,6 +539,7 @@ cv.addEventListener('click', e => {
 addEventListener('keydown', e => {
   initAudio();
   if (e.key === 'r' || e.key === 'R') {
+    stopMusic(G);
     G = createState();
     return;
   }
@@ -577,6 +578,11 @@ addEventListener('keydown', e => {
     return;
   }
   if (e.key === '6') G.selected = 'spyhq';
+  if (e.key === 'm' || e.key === 'M') {
+    if (G.musicPlaying) { stopMusic(G); addLog(G, '\u{1F507} Musik aus', 'c'); }
+    else { startMusic(G); addLog(G, '\u{1F3B5} Musik an', 'g'); }
+    return;
+  }
   playAlert();
 });
 

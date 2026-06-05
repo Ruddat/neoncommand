@@ -21,7 +21,8 @@ export function drawHUD(G) {
     ${G.attackCooldown > 0 ? `<div style="font-size:10px;color:#ff345d">\u23F3 Raketen laden: ${Math.ceil(G.attackCooldown)}s</div>` : ''}
     ${G.spyCooldown > 0 ? `<div style="font-size:10px;color:#ff2bd6">\u{1F575}\uFE0F Spione auf Mission: ${Math.ceil(G.spyCooldown)}s</div>` : ''}
     ${G.nuclearWinter ? '<div style="font-size:11px;font-weight:900;color:#88ccff">\u2744\uFE0F NUKLEARWINTER! Einkommen -30%</div>' : ''}
-    ${G.nukeCount > 0 && !G.nuclearWinter ? `<div style="font-size:10px;color:#ffb000">\u2622\uFE0F Nukes: ${G.nukeCount}/3 bis Winter</div>` : ''}`;
+    ${G.nukeCount > 0 && !G.nuclearWinter ? `<div style="font-size:10px;color:#ffb000">\u2622\uFE0F Nukes: ${G.nukeCount}/3 bis Winter</div>` : ''}
+    ${G.musicPlaying ? `<div style="font-size:9px;color:#555;cursor:pointer" data-action="toggleMusic">\u{1F3B5} ${G.defcon <= 2 ? 'Fallout Protocol' : G.defcon <= 3 ? 'Red Alert' : 'Defcon Ice'} (M=Mute)</div>` : ''}`;
 }
 
 export function drawIntel(G) {
