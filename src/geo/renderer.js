@@ -71,45 +71,173 @@ function drawContinent(cx, W, H, x, y, w, h, color) {
 
 // ====== DRAW: COUNTRY SELECTION SCREEN ======
 export function drawCountrySelect(cx, G, W, H) {
-  cx.fillStyle = 'rgba(0,0,0,.6)'; cx.fillRect(0, 0, W, H);
-  cx.textAlign = 'center';
-  const glitchX = Math.random() < 0.05 ? rnd(-3, 3) : 0;
-  const glitchY = Math.random() < 0.05 ? rnd(-2, 2) : 0;
-  cx.save(); cx.shadowColor = '#ff2bd6'; cx.shadowBlur = 30;
-  cx.fillStyle = '#00d9ff'; cx.font = '900 64px Arial'; cx.fillText('NEON COMMAND', W / 2 + glitchX, H * 0.1 + glitchY);
+  // Animated dark background with subtle grid
+  cx.fillStyle = '#040714'; cx.fillRect(0, 0, W, H);
+  const t = Date.now() * 0.001;
+  // Animated neon grid
+  cx.save();
+  cx.strokeStyle = 'rgba(0,217,255,.03)';
+  cx.lineWidth = 1;
+  const gridOffset = (t * 10) % 60;
+  for (let x = -60 + gridOffset; x < W + 60; x += 60) { cx.beginPath(); cx.moveTo(x, 0); cx.lineTo(x, H); cx.stroke(); }
+  for (let y = -60 + gridOffset; y < H + 60; y += 60) { cx.beginPath(); cx.moveTo(0, y); cx.lineTo(W, y); cx.stroke(); }
   cx.restore();
-  cx.fillStyle = '#ff2bd6'; cx.font = '900 32px Arial'; cx.fillText('GEOPOLITIK', W / 2, H * 0.1 + 45);
-  cx.fillStyle = '#aaa'; cx.font = '14px Arial';
-  cx.fillText('W\u00e4hle deine Nation \u2013 Alle Nationen bauen, k\u00e4mpfen und entwickeln sich!', W / 2, H * 0.1 + 75);
 
+  // Floating background particles
+  cx.save();
+  for (let i = 0; i < 30; i++) {
+    const px = ((i * 137.5 + t * 8) % (W + 40)) - 20;
+    const py = ((i * 97.3 + t * (3 + i * 0.3)) % (H + 40)) - 20;
+    cx.globalAlpha = 0.1 + 0.1 * Math.sin(t + i);
+    cx.fillStyle = i % 3 === 0 ? '#00d9ff' : i % 3 === 1 ? '#ff2bd6' : '#7d5cff';
+    cx.beginPath(); cx.arc(px, py, 1 + (i % 3), 0, 7); cx.fill();
+  }
+  cx.restore();
+
+  // Horizontal neon lines
+  cx.save();
+  const lineY = H * 0.17;
+  const lineGrad = cx.createLinearGradient(0, 0, W, 0);
+  lineGrad.addColorStop(0, 'rgba(0,217,255,0)');
+  lineGrad.addColorStop(0.3, 'rgba(0,217,255,.3)');
+  lineGrad.addColorStop(0.5, 'rgba(0,217,255,.5)');
+  lineGrad.addColorStop(0.7, 'rgba(0,217,255,.3)');
+  lineGrad.addColorStop(1, 'rgba(0,217,255,0)');
+  cx.strokeStyle = lineGrad; cx.lineWidth = 1;
+  cx.beginPath(); cx.moveTo(0, lineY); cx.lineTo(W, lineY); cx.stroke();
+  cx.globalAlpha = 0.3; cx.lineWidth = 3;
+  cx.beginPath(); cx.moveTo(W * 0.2, lineY); cx.lineTo(W * 0.8, lineY); cx.stroke();
+  cx.restore();
+
+  cx.textAlign = 'center';
+  // Glitch effect
+  const glitchX = Math.random() < 0.04 ? rnd(-4, 4) : 0;
+  const glitchY = Math.random() < 0.04 ? rnd(-2, 2) : 0;
+  // Title: NEON COMMAND
+  cx.save(); cx.shadowColor = '#00d9ff'; cx.shadowBlur = 40;
+  cx.fillStyle = '#00d9ff'; cx.font = '900 72px Orbitron, Arial'; cx.fillText('NEON COMMAND', W / 2 + glitchX, H * 0.08 + glitchY);
+  cx.restore();
+  // Subtitle: GEOPOLITIK
+  cx.save(); cx.shadowColor = '#ff2bd6'; cx.shadowBlur = 25;
+  cx.fillStyle = '#ff2bd6'; cx.font = '900 36px Orbitron, Arial'; cx.fillText('GEOPOLITIK', W / 2, H * 0.08 + 50);
+  cx.restore();
+  // Tagline
+  cx.fillStyle = '#667'; cx.font = '13px "Share Tech Mono", Arial';
+  cx.fillText('Strategie \u00b7 Diplomatie \u00b7 Nuklearkrieg \u00b7 Weltherrschaft', W / 2, H * 0.08 + 78);
+
+  // Nation cards
   const keys = Object.keys(NATIONS);
-  const cardW = 150, cardH = 190, gap = 14;
+  const cardW = 155, cardH = 210, gap = 14;
   const totalW = keys.length * cardW + (keys.length - 1) * gap;
   const startX = (W - totalW) / 2;
-  const startY = H * 0.24;
+  const startY = H * 0.25;
 
   keys.forEach((k, i) => {
     const n = NATIONS[k];
     const x = startX + i * (cardW + gap);
     const hover = G.mouseX > x && G.mouseX < x + cardW && G.mouseY > startY && G.mouseY < startY + cardH;
-    cx.fillStyle = hover ? 'rgba(0,217,255,.12)' : 'rgba(20,20,40,.85)';
-    cx.fillRect(x, startY, cardW, cardH);
-    cx.strokeStyle = hover ? n.color : 'rgba(255,255,255,.15)'; cx.lineWidth = hover ? 2 : 1;
-    cx.strokeRect(x, startY, cardW, cardH);
-    cx.fillStyle = n.color; cx.font = '36px Arial'; cx.fillText(n.flag, x + cardW / 2, startY + 40);
-    cx.fillStyle = '#fff'; cx.font = '900 15px Arial'; cx.fillText(n.name, x + cardW / 2, startY + 65);
-    cx.fillStyle = '#aaa'; cx.font = '10px Arial';
-    cx.fillText(`Mil ${'\u2588'.repeat(n.mil)}${'\u2591'.repeat(10 - n.mil)}`, x + cardW / 2, startY + 88);
-    cx.fillText(`\u00d6ko ${'\u2588'.repeat(n.eco)}${'\u2591'.repeat(10 - n.eco)}`, x + cardW / 2, startY + 103);
-    cx.fillText(`Tech ${'\u2588'.repeat(n.tech)}${'\u2591'.repeat(10 - n.tech)}`, x + cardW / 2, startY + 118);
-    const pLabel = { aggressive: '\u2694\uFE0F Aggressiv', defensive: '\u{1F6E1}\uFE0F Defensiv', diplomatic: '\u{1F91D} Diplomatisch', expansive: '\u{1F4C8} Expansiv' }[n.personality] || '';
-    cx.fillStyle = n.color; cx.font = '10px Arial'; cx.fillText(pLabel, x + cardW / 2, startY + 138);
-    cx.fillStyle = '#888'; cx.font = '9px Arial';
-    const words = n.desc.split(' '); let line = '', ly = startY + 155;
-    for (const w of words) { if ((line + ' ' + w).length > 20) { cx.fillText(line.trim(), x + cardW / 2, ly); ly += 11; line = w; } else { line += ' ' + w; } }
+
+    // Card background with gradient
+    cx.save();
+    const cardGrad = cx.createLinearGradient(x, startY, x, startY + cardH);
+    if (hover) {
+      cardGrad.addColorStop(0, 'rgba(0,217,255,.12)');
+      cardGrad.addColorStop(1, 'rgba(0,217,255,.04)');
+    } else {
+      cardGrad.addColorStop(0, 'rgba(20,20,40,.9)');
+      cardGrad.addColorStop(1, 'rgba(10,10,30,.95)');
+    }
+    cx.fillStyle = cardGrad;
+    // Rounded rect
+    const cr = 8;
+    cx.beginPath();
+    cx.moveTo(x + cr, startY); cx.lineTo(x + cardW - cr, startY);
+    cx.quadraticCurveTo(x + cardW, startY, x + cardW, startY + cr);
+    cx.lineTo(x + cardW, startY + cardH - cr);
+    cx.quadraticCurveTo(x + cardW, startY + cardH, x + cardW - cr, startY + cardH);
+    cx.lineTo(x + cr, startY + cardH);
+    cx.quadraticCurveTo(x, startY + cardH, x, startY + cardH - cr);
+    cx.lineTo(x, startY + cr);
+    cx.quadraticCurveTo(x, startY, x + cr, startY);
+    cx.closePath(); cx.fill();
+
+    // Border glow on hover
+    cx.strokeStyle = hover ? n.color : 'rgba(255,255,255,.1)';
+    cx.lineWidth = hover ? 2 : 1;
+    if (hover) { cx.shadowColor = n.color; cx.shadowBlur = 15; }
+    cx.stroke();
+    cx.restore();
+
+    // Top accent line
+    cx.save();
+    const accentGrad = cx.createLinearGradient(x, 0, x + cardW, 0);
+    accentGrad.addColorStop(0, n.color + '00');
+    accentGrad.addColorStop(0.5, n.color + (hover ? 'cc' : '66'));
+    accentGrad.addColorStop(1, n.color + '00');
+    cx.strokeStyle = accentGrad; cx.lineWidth = 2;
+    cx.beginPath(); cx.moveTo(x + 10, startY); cx.lineTo(x + cardW - 10, startY); cx.stroke();
+    cx.restore();
+
+    // Flag
+    cx.fillStyle = n.color; cx.font = '38px Arial'; cx.fillText(n.flag, x + cardW / 2, startY + 42);
+    // Name
+    cx.save(); cx.shadowColor = n.color; cx.shadowBlur = hover ? 10 : 0;
+    cx.fillStyle = '#fff'; cx.font = '900 15px Orbitron, Arial'; cx.fillText(n.name, x + cardW / 2, startY + 68);
+    cx.restore();
+
+    // Stat bars with labels
+    const drawStat = (label, value, max, yPos, color) => {
+      cx.fillStyle = '#555'; cx.font = '9px "Share Tech Mono", Arial';
+      cx.fillText(label, x + cardW / 2, yPos);
+      const barW = 80, barH = 5, bx = x + (cardW - barW) / 2, by = yPos + 3;
+      cx.fillStyle = 'rgba(255,255,255,.08)'; cx.fillRect(bx, by, barW, barH);
+      const fillW = barW * (value / max);
+      const barGrad = cx.createLinearGradient(bx, 0, bx + fillW, 0);
+      barGrad.addColorStop(0, color + '88');
+      barGrad.addColorStop(1, color);
+      cx.fillStyle = barGrad; cx.fillRect(bx, by, fillW, barH);
+      cx.fillStyle = color; cx.font = '8px Arial'; cx.fillText(value, x + cardW / 2, yPos + 14);
+    };
+    drawStat('MILIT\u00c4R', n.mil, 10, startY + 85, '#ef4444');
+    drawStat('\u00d6KONOMIE', n.eco, 10, startY + 105, '#fbbf24');
+    drawStat('TECHNOLOGIE', n.tech, 10, startY + 125, '#3b82f6');
+
+    // Personality badge
+    const pLabel = { aggressive: '\u2694\uFE0F AGGRESSIV', defensive: '\u{1F6E1}\uFE0F DEFENSIV', diplomatic: '\u{1F91D} DIPLOMATISCH', expansive: '\u{1F4C8} EXPANSIV' }[n.personality] || '';
+    cx.fillStyle = n.color; cx.font = 'bold 9px Orbitron, Arial'; cx.fillText(pLabel, x + cardW / 2, startY + 150);
+
+    // Description
+    cx.fillStyle = '#666'; cx.font = '9px "Share Tech Mono", Arial';
+    const words = n.desc.split(' '); let line = '', ly = startY + 168;
+    for (const w of words) { if ((line + ' ' + w).length > 18) { cx.fillText(line.trim(), x + cardW / 2, ly); ly += 11; line = w; } else { line += ' ' + w; } }
     if (line) cx.fillText(line.trim(), x + cardW / 2, ly);
+
+    // Starting money indicator
+    cx.fillStyle = '#555'; cx.font = '8px "Share Tech Mono", Arial';
+    cx.fillText(`Start: ${n.money}$`, x + cardW / 2, startY + 200);
   });
-  cx.fillStyle = '#555'; cx.font = '12px Arial'; cx.fillText('Klick auf eine Nation zum Starten', W / 2, H - 40);
+
+  // Bottom neon line
+  cx.save();
+  const blineY = H - 55;
+  const blineGrad = cx.createLinearGradient(0, 0, W, 0);
+  blineGrad.addColorStop(0, 'rgba(255,43,214,0)');
+  blineGrad.addColorStop(0.5, 'rgba(255,43,214,.3)');
+  blineGrad.addColorStop(1, 'rgba(255,43,214,0)');
+  cx.strokeStyle = blineGrad; cx.lineWidth = 1;
+  cx.beginPath(); cx.moveTo(0, blineY); cx.lineTo(W, blineY); cx.stroke();
+  cx.restore();
+
+  // Start prompt with pulsing animation
+  const promptAlpha = 0.5 + 0.5 * Math.sin(t * 2);
+  cx.save(); cx.globalAlpha = promptAlpha;
+  cx.fillStyle = '#00d9ff'; cx.font = '14px Orbitron, Arial';
+  cx.fillText('[ KLICKE AUF EINE NATION ]', W / 2, H - 30);
+  cx.restore();
+
+  // Controls hint
+  cx.fillStyle = '#333'; cx.font = '10px "Share Tech Mono", Arial';
+  cx.fillText('1-6 Bauen \u00b7 D Diplomatie \u00b7 K Angriff \u00b7 X Spionage \u00b7 U Upgrade \u00b7 M Musik \u00b7 R Neustart', W / 2, H - 12);
   cx.textAlign = 'left';
 }
 
@@ -425,33 +553,85 @@ export function drawWorldMap(cx, G, W, H, canBuild) {
 
 // ====== DRAW: GAME OVER ======
 export function drawGameOver(cx, G, W, H) {
-  cx.fillStyle = 'rgba(0,0,0,.8)'; cx.fillRect(0, 0, W, H); cx.textAlign = 'center';
-  const gx = Math.random() < 0.1 ? rnd(-5, 5) : 0;
-  cx.save(); cx.shadowColor = '#ff345d'; cx.shadowBlur = 40;
-  cx.fillStyle = '#ff345d'; cx.font = '900 56px Arial'; cx.fillText('NATION GEFALLEN', W / 2 + gx, H / 2 - 40);
+  cx.fillStyle = 'rgba(0,0,0,.85)'; cx.fillRect(0, 0, W, H); cx.textAlign = 'center';
+  const t = Date.now() * 0.001;
+  // Red vignette
+  cx.save();
+  const vg = cx.createRadialGradient(W/2, H/2, Math.min(W,H)*0.1, W/2, H/2, Math.max(W,H)*0.7);
+  vg.addColorStop(0, 'rgba(255,52,93,0)');
+  vg.addColorStop(1, 'rgba(255,52,93,.15)');
+  cx.fillStyle = vg; cx.fillRect(0, 0, W, H); cx.restore();
+
+  const gx = Math.random() < 0.08 ? rnd(-5, 5) : 0;
+  cx.save(); cx.shadowColor = '#ff345d'; cx.shadowBlur = 50;
+  cx.fillStyle = '#ff345d'; cx.font = '900 64px Orbitron, Arial'; cx.fillText('NATION GEFALLEN', W / 2 + gx, H / 2 - 50);
   cx.restore();
-  cx.fillStyle = '#fff'; cx.font = '20px Arial';
-  cx.fillText(`${NATIONS[G.nation].flag} ${NATIONS[G.nation].name} \u2013 Runde ${G.turn}`, W / 2, H / 2 + 10);
-  cx.fillStyle = '#aaa'; cx.font = '16px Arial'; cx.fillText('R = Neustart', W / 2, H / 2 + 50);
+
+  cx.save(); cx.shadowColor = NATIONS[G.nation].color; cx.shadowBlur = 15;
+  cx.fillStyle = '#fff'; cx.font = '22px "Share Tech Mono", Arial';
+  cx.fillText(`${NATIONS[G.nation].flag} ${NATIONS[G.nation].name} \u2013 Runde ${G.turn}`, W / 2, H / 2 + 5);
+  cx.restore();
+
+  // Stats
+  cx.fillStyle = '#888'; cx.font = '14px "Share Tech Mono", Arial';
+  cx.fillText(`Geb\u00e4ude: ${G.buildings.length} \u00b7 Verb\u00fcndete: ${G.allies.length} \u00b7 Nukes: ${G.nukeCount}`, W / 2, H / 2 + 35);
+
+  // Restart prompt
+  const rAlpha = 0.5 + 0.5 * Math.sin(t * 2);
+  cx.save(); cx.globalAlpha = rAlpha;
+  cx.fillStyle = '#ff345d'; cx.font = '16px Orbitron, Arial';
+  cx.fillText('[ R ] NEUSTART', W / 2, H / 2 + 70);
+  cx.restore();
   cx.textAlign = 'left';
 }
 
 // ====== DRAW: VICTORY ======
 export function drawVictory(cx, G, W, H) {
-  cx.fillStyle = 'rgba(0,0,0,.8)'; cx.fillRect(0, 0, W, H); cx.textAlign = 'center';
-  const gx = Math.random() < 0.1 ? rnd(-3, 3) : 0;
-  cx.save(); cx.shadowColor = '#00ff9d'; cx.shadowBlur = 40;
-  cx.fillStyle = '#00ff9d'; cx.font = '900 56px Arial'; cx.fillText('SIEG!', W / 2 + gx, H / 2 - 60);
-  cx.restore();
-  cx.fillStyle = '#fbbf24'; cx.font = '900 28px Arial';
-  cx.fillText(`${NATIONS[G.nation].flag} ${NATIONS[G.nation].name} dominiert die Welt!`, W / 2, H / 2 - 10);
-  cx.fillStyle = '#fff'; cx.font = '18px Arial';
-  cx.fillText(`Runde ${G.turn} \u00b7 ${G.allies.length + 1}/5 Nationen verb\u00fcndet`, W / 2, H / 2 + 25);
-  if (G.nuclearWinter) {
-    cx.fillStyle = '#88ccff'; cx.font = '14px Arial';
-    cx.fillText('Aber zu welchem Preis... Nuklearwinter!', W / 2, H / 2 + 50);
+  cx.fillStyle = 'rgba(0,0,0,.85)'; cx.fillRect(0, 0, W, H); cx.textAlign = 'center';
+  const t = Date.now() * 0.001;
+  // Green vignette
+  cx.save();
+  const vg = cx.createRadialGradient(W/2, H/2, Math.min(W,H)*0.1, W/2, H/2, Math.max(W,H)*0.7);
+  vg.addColorStop(0, 'rgba(0,255,157,0)');
+  vg.addColorStop(1, 'rgba(0,255,157,.12)');
+  cx.fillStyle = vg; cx.fillRect(0, 0, W, H); cx.restore();
+
+  // Victory sparkles
+  cx.save();
+  for (let i = 0; i < 20; i++) {
+    const sx = W/2 + Math.cos(t * 0.5 + i * 0.314) * (100 + i * 15);
+    const sy = H/2 - 30 + Math.sin(t * 0.7 + i * 0.5) * (60 + i * 8);
+    cx.globalAlpha = 0.3 + 0.3 * Math.sin(t * 3 + i);
+    cx.fillStyle = i % 2 === 0 ? '#00ff9d' : '#fbbf24';
+    cx.beginPath(); cx.arc(sx, sy, 2, 0, 7); cx.fill();
   }
-  cx.fillStyle = '#aaa'; cx.font = '16px Arial'; cx.fillText('R = Neustart', W / 2, H / 2 + 75);
+  cx.restore();
+
+  const gx = Math.random() < 0.06 ? rnd(-3, 3) : 0;
+  cx.save(); cx.shadowColor = '#00ff9d'; cx.shadowBlur = 50;
+  cx.fillStyle = '#00ff9d'; cx.font = '900 72px Orbitron, Arial'; cx.fillText('SIEG!', W / 2 + gx, H / 2 - 70);
+  cx.restore();
+
+  cx.save(); cx.shadowColor = '#fbbf24'; cx.shadowBlur = 20;
+  cx.fillStyle = '#fbbf24'; cx.font = '900 26px Orbitron, Arial';
+  cx.fillText(`${NATIONS[G.nation].flag} ${NATIONS[G.nation].name}`, W / 2, H / 2 - 15);
+  cx.restore();
+
+  cx.fillStyle = '#fff'; cx.font = '18px "Share Tech Mono", Arial';
+  cx.fillText(`Runde ${G.turn} \u00b7 ${G.allies.length + 1}/5 Nationen verb\u00fcndet`, W / 2, H / 2 + 20);
+
+  if (G.nuclearWinter) {
+    cx.save(); cx.shadowColor = '#88ccff'; cx.shadowBlur = 10;
+    cx.fillStyle = '#88ccff'; cx.font = '14px "Share Tech Mono", Arial';
+    cx.fillText('Aber zu welchem Preis... Nuklearwinter!', W / 2, H / 2 + 50);
+    cx.restore();
+  }
+
+  const rAlpha = 0.5 + 0.5 * Math.sin(t * 2);
+  cx.save(); cx.globalAlpha = rAlpha;
+  cx.fillStyle = '#00ff9d'; cx.font = '16px Orbitron, Arial';
+  cx.fillText('[ R ] NEUSTART', W / 2, H / 2 + 80);
+  cx.restore();
   cx.textAlign = 'left';
 }
 

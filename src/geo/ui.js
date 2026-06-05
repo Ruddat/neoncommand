@@ -5,31 +5,38 @@ import { playAlert } from './audio.js';
 export function drawHUD(G) {
   const el = document.getElementById('hud');
   if (!el) return;
-  if (G.mode === 'menu') { el.innerHTML = '<b style="color:#00d9ff">NEON COMMAND</b><br>Geopolitik'; return; }
+  if (G.mode === 'menu') { el.innerHTML = '<div style="font-family:Orbitron,sans-serif;font-size:18px;font-weight:900;color:#00d9ff;text-shadow:0 0 10px #00d9ff">NEON COMMAND</div><div style="font-family:Orbitron,sans-serif;font-size:12px;color:#ff2bd6;text-shadow:0 0 8px #ff2bd6">GEOPOLITIK</div>'; return; }
   const n = NATIONS[G.nation];
   const nt = Math.max(0, Math.ceil(G.turnLength - G.turnTimer));
   const aiBldCount = G.enemyNations.reduce((s, k) => s + (G.ai[k]?.buildings.length || 0), 0);
-  el.innerHTML = `<div style="font-size:13px;font-weight:900;color:${n.color}">${n.flag} ${n.name}</div>
-    <div>Geld <b style="color:#ffb000">${Math.floor(G.money)}$</b> <span style="color:#888">(+${Math.floor(G.income)}/s)</span>${G.nuclearWinter ? ' <span style="color:#88ccff">\u2744\uFE0F -30%</span>' : ''}</div>
-    <div>Mil <b style="color:#ef4444">${Math.floor(G.mil)}</b> \u00b7 Def <b style="color:#22c55e">${Math.floor(G.defense)}</b> \u00b7 Off <b style="color:#a855f7">${G.offense}</b></div>
+  const moneyColor = G.money > 200 ? '#fbbf24' : G.money > 50 ? '#ffb000' : '#ff345d';
+  const diploCount = G.diplomacyCooldown > 0 ? Math.ceil(G.diplomacyCooldown) : 0;
+  el.innerHTML = `<div style="font-family:Orbitron,sans-serif;font-size:14px;font-weight:900;color:${n.color};text-shadow:0 0 8px ${n.color}">${n.flag} ${n.name}</div>
+    <div>Geld <b style="color:${moneyColor};font-size:14px">${Math.floor(G.money)}$</b> <span style="color:#666">(+${Math.floor(G.income)}/s)</span>${G.nuclearWinter ? ' <span style="color:#88ccff">\u2744\uFE0F -30%</span>' : ''}</div>
+    <div style="display:flex;gap:10px;margin:2px 0">
+      <span>Mil <b style="color:#ef4444">${Math.floor(G.mil)}</b></span>
+      <span>Def <b style="color:#22c55e">${Math.floor(G.defense)}</b></span>
+      <span>Off <b style="color:#a855f7">${G.offense}</b></span>
+    </div>
     <div>Tech <b style="color:#3b82f6">${Math.floor(G.tech)}</b> \u00b7 Spione <b style="color:#ff2bd6">${G.spies || 0}</b></div><hr>
-    <div>Runde <b>${G.turn}</b> \u00b7 N\u00e4chste in <b style="color:#00d9ff">${nt}s</b></div>
-    <div style="font-size:10px;color:#888">Deine Geb\u00e4ude: ${G.buildings.length} | KI Geb\u00e4ude: ${aiBldCount} | Verb\u00fcndete: ${G.allies.length}/4</div>
-    ${G.attackMode ? '<div style="font-size:12px;font-weight:900;color:#a855f7">\u{1F3AF} ANGRIFFSMODUS \u2013 Klicke auf Feind!</div>' : ''}
-    ${G.diplomacyMode ? '<div style="font-size:12px;font-weight:900;color:#00ff9d">\u{1F91D} DIPLOMATIE \u2013 Klicke auf Nation! (-20$)</div>' : ''}
-    ${G.spyMode ? '<div style="font-size:12px;font-weight:900;color:#ff2bd6">\u{1F575}\uFE0F SPIONAGE \u2013 Klicke auf Nation! (X=Abbruch)</div>' : ''}
+    <div style="font-family:Orbitron,sans-serif;font-size:11px">Runde <b>${G.turn}</b> \u00b7 <b style="color:#00d9ff">${nt}s</b></div>
+    <div style="font-size:10px;color:#555">Geb\u00e4ude: ${G.buildings.length} \u00b7 KI: ${aiBldCount} \u00b7 Verb\u00fcndete: ${G.allies.length}/4</div>
+    ${G.attackMode ? '<div style="font-family:Orbitron,sans-serif;font-size:12px;font-weight:900;color:#a855f7;text-shadow:0 0 8px #a855f7">\u{1F3AF} ANGRIFFSMODUS \u2013 Klicke auf Feind!</div>' : ''}
+    ${G.diplomacyMode ? '<div style="font-family:Orbitron,sans-serif;font-size:12px;font-weight:900;color:#00ff9d;text-shadow:0 0 8px #00ff9d">\u{1F91D} DIPLOMATIE \u2013 Klicke auf Nation!</div>' : ''}
+    ${G.spyMode ? '<div style="font-family:Orbitron,sans-serif;font-size:12px;font-weight:900;color:#ff2bd6;text-shadow:0 0 8px #ff2bd6">\u{1F575}\uFE0F SPIONAGE \u2013 Klicke auf Nation!</div>' : ''}
     ${G.attackCooldown > 0 ? `<div style="font-size:10px;color:#ff345d">\u23F3 Raketen laden: ${Math.ceil(G.attackCooldown)}s</div>` : ''}
     ${G.spyCooldown > 0 ? `<div style="font-size:10px;color:#ff2bd6">\u{1F575}\uFE0F Spione auf Mission: ${Math.ceil(G.spyCooldown)}s</div>` : ''}
-    ${G.nuclearWinter ? '<div style="font-size:11px;font-weight:900;color:#88ccff">\u2744\uFE0F NUKLEARWINTER! Einkommen -30%</div>' : ''}
+    ${diploCount > 0 ? `<div style="font-size:10px;color:#00ff9d">\u{1F91D} Diplomatie-Abklingzeit: ${diploCount}s</div>` : ''}
+    ${G.nuclearWinter ? '<div style="font-family:Orbitron,sans-serif;font-size:11px;font-weight:900;color:#88ccff;text-shadow:0 0 8px #88ccff">\u2744\uFE0F NUKLEARWINTER!</div>' : ''}
     ${G.nukeCount > 0 && !G.nuclearWinter ? `<div style="font-size:10px;color:#ffb000">\u2622\uFE0F Nukes: ${G.nukeCount}/3 bis Winter</div>` : ''}
-    ${G.musicPlaying ? `<div style="font-size:9px;color:#555;cursor:pointer" data-action="toggleMusic">\u{1F3B5} ${G.defcon <= 2 ? 'Fallout Protocol' : G.defcon <= 3 ? 'Red Alert' : 'Defcon Ice'} (M=Mute)</div>` : ''}`;
+    ${G.musicPlaying ? `<div style="font-size:9px;color:#444;cursor:pointer" data-action="toggleMusic">\u{1F3B5} ${G.defcon <= 2 ? 'Fallout Protocol' : G.defcon <= 3 ? 'Red Alert' : 'Defcon Ice'} (M)</div>` : ''}`;
 }
 
 export function drawIntel(G) {
   const el = document.getElementById('intel');
   if (!el) return;
   if (G.mode !== 'playing') { el.innerHTML = ''; return; }
-  let html = '<div style="font-size:12px;font-weight:900;color:#7d5cff;margin-bottom:4px">\u{1F4E1} GEHEIMDIENST</div>';
+  let html = '<div style="font-family:Orbitron,sans-serif;font-size:12px;font-weight:900;color:#7d5cff;text-shadow:0 0 8px #7d5cff;margin-bottom:4px">\u{1F4E1} GEHEIMDIENST</div>';
   for (const k of G.enemyNations) {
     const n = NATIONS[k]; const ai = G.ai[k]; const h = G.hostility[k];
     if (!ai) continue;
@@ -40,9 +47,9 @@ export function drawIntel(G) {
     const types = {}; ai.buildings.forEach(b => { types[b.type] = (types[b.type] || 0) + 1; });
     const bldSummary = Object.entries(types).map(([t, c]) => `${BLDS[t].symbol}${c}`).join(' ');
     const filled = Math.min(10, Math.max(0, Math.floor(h / 10)));
-    const hBar = '\u2588'.repeat(filled) + '\u2591'.repeat(10 - filled);
-    html += `<div style="margin:3px 0;border-bottom:1px solid rgba(125,92,255,.1);padding-bottom:2px">${n.flag} <span style="color:${hCol}">${status}</span> ${pIcon} <span style="font-size:8px;color:#888">${hBar}</span></div>`;
-    html += `<div style="font-size:9px;color:#999;margin-bottom:3px">\u{1F3ED}${ai.buildings.length} ${bldSummary} | \u{1F4B0}${Math.floor(ai.money)}$</div>`;
+    const hBar = '<span style="color:' + hCol + '">' + '\u2588'.repeat(filled) + '</span>' + '<span style="color:#333">' + '\u2591'.repeat(10 - filled) + '</span>';
+    html += `<div style="margin:3px 0;border-bottom:1px solid rgba(125,92,255,.1);padding-bottom:2px">${n.flag} <span style="color:${hCol};font-family:Orbitron,sans-serif;font-size:9px;font-weight:700">${status}</span> ${pIcon} <span style="font-size:8px">${hBar}</span></div>`;
+    html += `<div style="font-size:9px;color:#777;margin-bottom:3px">\u{1F3ED}${ai.buildings.length} ${bldSummary} | <span style="color:#fbbf24">\u{1F4B0}${Math.floor(ai.money)}$</span></div>`;
   }
   el.innerHTML = html;
 }
@@ -56,10 +63,15 @@ export function drawBuildBar(G) {
     const active = G.selected === k; const aff = G.money >= s.cost;
     html += `<div class="bb${active ? ' active' : ''}" style="opacity:${aff ? 1 : 0.4}" data-action="select" data-type="${k}"><div class="k">${s.key}</div><div class="n" style="color:${s.color}">${s.label}</div><div class="c">${s.cost}$</div></div>`;
   }
-  html += `<div class="bb" data-action="diplomacy" style="border-color:#ff2bd6"><div class="k" style="color:#ff2bd6">D</div><div class="n" style="color:#ff2bd6">Diplomatie</div><div class="c">20$</div></div>`;
-  html += `<div class="bb" data-action="attack" style="border-color:#a855f7;opacity:${G.offense > 0 && G.attackCooldown <= 0 ? 1 : 0.4}"><div class="k" style="color:#a855f7">K</div><div class="n" style="color:#a855f7">Angriff</div><div class="c">${G.offense > 0 ? Math.floor(G.offense / 15) + ' Raketen' : 'Baue Silo!'}</div></div>`;
-  html += `<div class="bb" data-action="spy" style="border-color:#ff2bd6;opacity:${(G.spies || 0) > 0 && (G.spyCooldown || 0) <= 0 ? 1 : 0.4}"><div class="k" style="color:#ff2bd6">X</div><div class="n" style="color:#ff2bd6">Spionage</div><div class="c">${(G.spies || 0) > 0 ? G.spies + ' Spione' : 'Baue HQ!'}</div></div>`;
-  html += `<div class="bb" data-action="upgrade" style="border-color:#fbbf24"><div class="k" style="color:#fbbf24">U</div><div class="n" style="color:#fbbf24">Upgrade</div><div class="c">Klick+U</div></div>`;
+  // Diplomacy: show cheapest available cost
+  const minDiploCost = G.enemyNations.reduce((min, k) => {
+    const c = G.diplomacyCount[k] || 0;
+    return Math.min(min, Math.floor(20 + c * 12 + c * c * 2));
+  }, 999);
+  html += `<div class="bb" data-action="diplomacy" style="border-color:#ff2bd6;opacity:${G.money >= minDiploCost && G.diplomacyCooldown <= 0 ? 1 : 0.4}"><div class="k" style="color:#ff2bd6">D</div><div class="n" style="color:#ff2bd6">Diplomatie</div><div class="c">${minDiploCost}$+</div></div>`;
+  html += `<div class="bb" data-action="attack" style="border-color:#a855f7;opacity:${G.offense > 0 && G.attackCooldown <= 0 ? 1 : 0.4}"><div class="k" style="color:#a855f7">K</div><div class="n" style="color:#a855f7">Angriff</div><div class="c">${G.offense > 0 ? Math.floor(G.offense / 15) + ' Rak' : 'Silo!'}</div></div>`;
+  html += `<div class="bb" data-action="spy" style="border-color:#ff2bd6;opacity:${(G.spies || 0) > 0 && (G.spyCooldown || 0) <= 0 ? 1 : 0.4}"><div class="k" style="color:#ff2bd6">X</div><div class="n" style="color:#ff2bd6">Spionage</div><div class="c">${(G.spies || 0) > 0 ? G.spies + ' Spione' : 'HQ!'}</div></div>`;
+  html += `<div class="bb" data-action="upgrade" style="border-color:#fbbf24"><div class="k" style="color:#fbbf24">U</div><div class="n" style="color:#fbbf24">Upgrade</div><div class="c">Klick</div></div>`;
   el.innerHTML = html;
 }
 
