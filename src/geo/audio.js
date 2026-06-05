@@ -8,14 +8,14 @@ export function initAudio() {
 
 // ====== MP3 BACKGROUND MUSIC SYSTEM ======
 // Track mapping by DEFCON level:
-//   DEFCON 5 (Frieden) → Defcon Ice Room.mp3   — atmospheric, cold
-//   DEFCON 3-4 (Wachsam/Erhöht) → Red Alert At Dawn.mp3 — tension building
-//   DEFCON 1-2 (Kritisch/Atomkrieg) → Fallout Protocol.mp3 — full dread
+//   DEFCON 5 (Frieden) → defcon-ice-room.mp3   — atmospheric, cold
+//   DEFCON 3-4 (Wachsam/Erhöht) → red-alert-at-dawn.mp3 — tension building
+//   DEFCON 1-2 (Kritisch/Atomkrieg) → fallout-protocol.mp3 — full dread
 
 const TRACKS = {
-  peace: { src: '/audio/Defcon Ice Room.mp3', defconRange: [4, 5] },
-  tension: { src: '/audio/Red Alert At Dawn.mp3', defconRange: [3, 3] },
-  war: { src: '/audio/Fallout Protocol.mp3', defconRange: [1, 2] },
+  peace: { src: '/audio/defcon-ice-room.mp3', defconRange: [4, 5] },
+  tension: { src: '/audio/red-alert-at-dawn.mp3', defconRange: [3, 3] },
+  war: { src: '/audio/fallout-protocol.mp3', defconRange: [1, 2] },
 };
 
 let currentTrack = null; // 'peace' | 'tension' | 'war'
